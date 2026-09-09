@@ -1,0 +1,89 @@
+extends Node
+class_name CityGameState
+
+signal state_changed
+signal day_advanced(day: int)
+signal tax_due(amount: int)
+signal game_over(reason: String)
+
+const STARTING_MONEY := 100
+const STARTING_WEEKLY_TAX := 80
+const TAX_DUE_WEEKDAY := 7
+
+var current_day: int = 1
+var office := OfficeState.new()
+var tax_manager := TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
+var is_game_over: bool = false
+var game_over_reason: String = ""
+
+func _ready() -> void:
+	reset_game()
+
+
+func reset_game() -> void:
+	current_day = 1
+	office = OfficeState.new()
+	office.reset(STARTING_MONEY)
+	tax_manager = TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
+	is_game_over = false
+	game_over_reason = ""
+	state_changed.emit()
+
+
+func advance_day() -> void:
+	if is_game_over:
+		return
+
+	if tax_manager.is_due(current_day) and not tax_manager.has_paid_current_week(current_day):
+		_set_game_over("Weekly tax was not paid.")
+		return
+
+	current_day += 1
+
+	for request in office.advance_requests_one_day():
+		office.complete_request(request)
+
+	if tax_manager.is_due(current_day):
+		if office.money < tax_manager.weekly_tax:
+			_set_game_over("Not enough money to pay the weekly tax.")
+			return
+
+		tax_due.emit(tax_manager.weekly_tax)
+
+	day_advanced.emit(current_day)
+	state_changed.emit()
+
+
+func pay_weekly_tax() -> bool:
+	if is_game_over:
+		return false
+
+	if not tax_manager.is_due(current_day):
+		return false
+
+	if tax_manager.has_paid_current_week(current_day):
+		return false
+
+	if office.money < tax_manager.weekly_tax:
+		_set_game_over("Not enough money to pay the weekly tax.")
+		return false
+
+	office.money -= tax_manager.weekly_tax
+	tax_manager.mark_paid(current_day)
+	state_changed.emit()
+	return true
+
+
+func get_week() -> int:
+	return tax_manager.current_week(current_day)
+
+
+func get_weekday() -> int:
+	return tax_manager.weekday(current_day)
+
+
+func _set_game_over(reason: String) -> void:
+	is_game_over = true
+	game_over_reason = reason
+	game_over.emit(reason)
+	state_changed.emit()

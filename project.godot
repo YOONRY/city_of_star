@@ -1,0 +1,23 @@
+; Engine configuration file.
+; It is best edited using the Godot editor.
+
+config_version=5
+
+[application]
+
+config/name="City of Star"
+run/main_scene="res://scenes/main/main.tscn"
+config/features=PackedStringArray("4.3")
+config/icon="res://assets/icons/city_of_star_icon.svg"
+
+[autoload]
+
+ContentCatalog="*res://scripts/autoloads/content_catalog.gd"
+GameState="*res://scripts/autoloads/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"

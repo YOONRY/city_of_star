@@ -1,0 +1,9 @@
+.godot/
+.import/
+export/
+exports/
+*.tmp
+*.log
+
+# Local design drafts
+*.docx
