@@ -23,6 +23,7 @@ var inventory_card_list: VBoxContainer
 var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
+var expanded_character_card_ids: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -230,6 +231,9 @@ func _make_panel(background_color: Color = Color("#18222C"), border_color: Color
 
 
 func _make_card_row(card: CardDefinition) -> PanelContainer:
+	if card.is_character():
+		return _make_character_card_row(card)
+
 	var row := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#21303C")
@@ -268,6 +272,128 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 	box.add_child(stat_label)
 
 	return row
+
+
+func _make_character_card_row(card: CardDefinition) -> PanelContainer:
+	var row := PanelContainer.new()
+	var is_expanded := expanded_character_card_ids.has(card.id)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#21303C") if not is_expanded else Color("#263B49")
+	style.border_color = Color("#3A5365") if not is_expanded else Color("#F4C95D")
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.tooltip_text = "Click to toggle details."
+	row.gui_input.connect(_on_character_card_gui_input.bind(card.id))
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	box.add_child(header)
+
+	header.add_child(_make_profile_frame(card))
+
+	var summary := VBoxContainer.new()
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	summary.custom_minimum_size = Vector2(0, 86)
+	header.add_child(summary)
+
+	var name_label := _make_label(card.label(), 15)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	summary.add_child(name_label)
+
+	var summary_spacer := Control.new()
+	summary_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	summary.add_child(summary_spacer)
+
+	var job_label := _make_label(_character_job(card), 12)
+	job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	summary.add_child(job_label)
+
+	if is_expanded:
+		box.add_child(_make_character_detail(card))
+
+	return row
+
+
+func _make_profile_frame(card: CardDefinition) -> PanelContainer:
+	var frame := PanelContainer.new()
+	frame.custom_minimum_size = Vector2(72, 86)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#111A22")
+	style.border_color = Color("#60798C")
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	style.corner_radius_bottom_right = 5
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	frame.add_theme_stylebox_override("panel", style)
+
+	var label := _make_label(_card_initials(card), 20)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", Color("#F4C95D"))
+	frame.add_child(label)
+	return frame
+
+
+func _make_character_detail(card: CardDefinition) -> VBoxContainer:
+	var detail := VBoxContainer.new()
+	detail.add_theme_constant_override("separation", 8)
+
+	var stats := GridContainer.new()
+	stats.columns = 2
+	stats.add_theme_constant_override("h_separation", 18)
+	stats.add_theme_constant_override("v_separation", 6)
+	detail.add_child(stats)
+
+	_add_metric(stats, "STR").text = str(card.stats.strength)
+	_add_metric(stats, "AGI").text = str(card.stats.agility)
+	_add_metric(stats, "INT").text = str(card.stats.intelligence)
+	_add_metric(stats, "CHM").text = str(card.stats.charm)
+
+	var wage_label := _make_label("Wage %s" % card.weekly_wage, 12)
+	wage_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	detail.add_child(wage_label)
+
+	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
+	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.add_child(skill_label)
+
+	var tag_label := _make_label("Tags: %s" % _format_string_array(card.tags, "None"), 12)
+	tag_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.add_child(tag_label)
+
+	return detail
 
 
 func _make_event_row(request: RequestDefinition) -> PanelContainer:
@@ -500,6 +626,36 @@ func _card_meta(card: CardDefinition) -> String:
 	return " / ".join(parts)
 
 
+func _character_job(card: CardDefinition) -> String:
+	if String(card.job).is_empty():
+		return "Unassigned"
+
+	return String(card.job)
+
+
+func _card_initials(card: CardDefinition) -> String:
+	var words := card.label().split(" ", false)
+	var initials := ""
+
+	for word in words:
+		if word.length() > 0:
+			initials += word.substr(0, 1).to_upper()
+		if initials.length() >= 2:
+			break
+
+	if initials.is_empty():
+		return "?"
+
+	return initials
+
+
+func _format_string_array(values: PackedStringArray, fallback: String) -> String:
+	if values.is_empty():
+		return fallback
+
+	return ", ".join(values)
+
+
 func _format_stats(stats: StatBlock) -> String:
 	if stats == null:
 		return "STR 0  AGI 0  INT 0  CHM 0"
@@ -544,6 +700,7 @@ func _on_pay_tax_pressed() -> void:
 
 
 func _on_reset_pressed() -> void:
+	expanded_character_card_ids.clear()
 	GameState.reset_game()
 
 
@@ -563,3 +720,15 @@ func _toggle_inventory_drawer(card_type: int) -> void:
 
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
+
+
+func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			if expanded_character_card_ids.has(card_id):
+				expanded_character_card_ids.erase(card_id)
+			else:
+				expanded_character_card_ids[card_id] = true
+
+			_refresh_character_cards()
