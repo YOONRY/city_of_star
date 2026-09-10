@@ -310,7 +310,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 
 	var summary := VBoxContainer.new()
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	summary.custom_minimum_size = Vector2(0, 86)
+	summary.custom_minimum_size = Vector2(0, 56)
 	header.add_child(summary)
 
 	var name_label := _make_label(card.label(), 15)
@@ -331,12 +331,13 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	if is_expanded:
 		box.add_child(_make_character_detail(card))
 
+	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 	return row
 
 
 func _make_profile_frame(card: CardDefinition) -> PanelContainer:
 	var frame := PanelContainer.new()
-	frame.custom_minimum_size = Vector2(72, 86)
+	frame.custom_minimum_size = Vector2(56, 56)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#111A22")
 	style.border_color = Color("#60798C")
@@ -604,6 +605,15 @@ func _clear_children(container: Node) -> void:
 	for child in container.get_children():
 		container.remove_child(child)
 		child.queue_free()
+
+
+func _set_mouse_filter_recursive(node: Node, mouse_filter: int) -> void:
+	if node is Control:
+		var control := node as Control
+		control.mouse_filter = mouse_filter
+
+	for child in node.get_children():
+		_set_mouse_filter_recursive(child, mouse_filter)
 
 
 func _card_meta(card: CardDefinition) -> String:
