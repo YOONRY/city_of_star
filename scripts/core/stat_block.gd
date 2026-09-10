@@ -5,6 +5,7 @@ class_name StatBlock
 @export var agility: int = 0
 @export var intelligence: int = 0
 @export var charm: int = 0
+@export var health: int = 0
 
 func clone() -> StatBlock:
 	var block := StatBlock.new()
@@ -12,6 +13,7 @@ func clone() -> StatBlock:
 	block.agility = agility
 	block.intelligence = intelligence
 	block.charm = charm
+	block.health = health
 	return block
 
 
@@ -23,6 +25,7 @@ func add(other: StatBlock) -> StatBlock:
 	agility += other.agility
 	intelligence += other.intelligence
 	charm += other.charm
+	health += other.health
 	return self
 
 
@@ -40,11 +43,12 @@ func meets(required: StatBlock) -> bool:
 		and agility >= required.agility
 		and intelligence >= required.intelligence
 		and charm >= required.charm
+		and health >= required.health
 	)
 
 
 func total() -> int:
-	return strength + agility + intelligence + charm
+	return strength + agility + intelligence + charm + health
 
 
 func as_dictionary() -> Dictionary:
@@ -53,4 +57,5 @@ func as_dictionary() -> Dictionary:
 		"agility": agility,
 		"intelligence": intelligence,
 		"charm": charm,
+		"health": health,
 	}

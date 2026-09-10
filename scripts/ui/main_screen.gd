@@ -379,6 +379,7 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	_add_metric(stats, "AGI").text = str(card.stats.agility)
 	_add_metric(stats, "INT").text = str(card.stats.intelligence)
 	_add_metric(stats, "CHM").text = str(card.stats.charm)
+	_add_metric(stats, "HP").text = str(card.stats.health)
 
 	var wage_label := _make_label("Wage %s" % card.weekly_wage, 12)
 	wage_label.add_theme_color_override("font_color", Color("#D7DEE8"))
@@ -668,13 +669,14 @@ func _format_string_array(values: PackedStringArray, fallback: String) -> String
 
 func _format_stats(stats: StatBlock) -> String:
 	if stats == null:
-		return "STR 0  AGI 0  INT 0  CHM 0"
+		return "STR 0  AGI 0  INT 0  CHM 0  HP 0"
 
-	return "STR %s  AGI %s  INT %s  CHM %s" % [
+	return "STR %s  AGI %s  INT %s  CHM %s  HP %s" % [
 		stats.strength,
 		stats.agility,
 		stats.intelligence,
 		stats.charm,
+		stats.health,
 	]
 
 

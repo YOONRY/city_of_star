@@ -18,6 +18,7 @@ enum Stat {
 	AGILITY,
 	INTELLIGENCE,
 	CHARM,
+	HEALTH,
 }
 
 const CARD_TYPE_LABELS := {

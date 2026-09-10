@@ -9,6 +9,7 @@ strength = 1
 agility = 2
 intelligence = 3
 charm = 5
+health = 18
 
 [resource]
 script = ExtResource("1_card")
