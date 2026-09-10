@@ -313,7 +313,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	summary.custom_minimum_size = Vector2(0, 56)
 	header.add_child(summary)
 
-	var name_label := _make_label(card.label(), 15)
+	var name_label := _make_label(card.label(), 19)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
