@@ -76,6 +76,33 @@ func pay_weekly_tax() -> bool:
 	return true
 
 
+func can_hire_card(card: CardDefinition) -> bool:
+	if is_game_over or card == null or not card.is_character():
+		return false
+
+	if office.owned_cards.has(card):
+		return false
+
+	return office.money >= get_hire_cost(card)
+
+
+func hire_card(card: CardDefinition) -> bool:
+	if not can_hire_card(card):
+		return false
+
+	office.money -= get_hire_cost(card)
+	office.add_card(card)
+	state_changed.emit()
+	return true
+
+
+func get_hire_cost(card: CardDefinition) -> int:
+	if card == null:
+		return 0
+
+	return maxi(0, card.weekly_wage)
+
+
 func get_week() -> int:
 	return tax_manager.current_week(current_day)
 

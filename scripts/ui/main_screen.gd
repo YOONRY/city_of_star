@@ -20,6 +20,7 @@ var inventory_panel: PanelContainer
 var inventory_drawer: PanelContainer
 var inventory_drawer_title: Label
 var inventory_card_list: VBoxContainer
+var personnel_button: Button
 var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
@@ -176,6 +177,10 @@ func _build_ui() -> void:
 	var inventory_buttons := HBoxContainer.new()
 	inventory_buttons.add_theme_constant_override("separation", 10)
 	inventory_box.add_child(inventory_buttons)
+
+	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
+	personnel_button.pressed.connect(_on_personnel_pressed)
+	inventory_buttons.add_child(personnel_button)
 
 	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
 	equipment_button.pressed.connect(_on_equipment_pressed)
@@ -398,6 +403,72 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	return detail
 
 
+func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
+	var row := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#202C35")
+	style.border_color = Color("#3A5365")
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	row.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	box.add_child(header)
+
+	header.add_child(_make_profile_frame(card))
+
+	var summary := VBoxContainer.new()
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(summary)
+
+	var name_label := _make_label(card.label(), 15)
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	summary.add_child(name_label)
+
+	var job_label := _make_label(_character_job(card), 12)
+	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	summary.add_child(job_label)
+
+	var cost_label := _make_label("Hire cost %s" % GameState.get_hire_cost(card), 12)
+	cost_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	summary.add_child(cost_label)
+
+	var hire_button := Button.new()
+	hire_button.text = "Hire"
+	hire_button.disabled = not GameState.can_hire_card(card)
+	hire_button.pressed.connect(_on_hire_pressed.bind(card.id))
+	header.add_child(hire_button)
+
+	var stat_label := _make_label(_format_stats(card.stats), 12)
+	stat_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	stat_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(stat_label)
+
+	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
+	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(skill_label)
+
+	return row
+
+
 func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -539,7 +610,10 @@ func _refresh_inventory_drawer() -> void:
 	action_panel.visible = false
 	inventory_drawer.visible = true
 
-	if active_drawer_type == GameEnums.CardType.EQUIPMENT:
+	if active_drawer_type == GameEnums.CardType.CHARACTER:
+		inventory_drawer_title.text = "Personnel Office"
+		_populate_hire_candidate_list()
+	elif active_drawer_type == GameEnums.CardType.EQUIPMENT:
 		inventory_drawer_title.text = "Equipment Cards"
 		_populate_card_list(
 			inventory_card_list,
@@ -556,6 +630,7 @@ func _refresh_inventory_drawer() -> void:
 
 
 func _refresh_inventory_buttons() -> void:
+	personnel_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.CHARACTER else Color.WHITE
 	equipment_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.EQUIPMENT else Color.WHITE
 	consumable_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.CONSUMABLE else Color.WHITE
 
@@ -583,6 +658,18 @@ func _populate_event_list(requests: Array) -> void:
 			event_list.add_child(_make_event_row(request))
 
 
+func _populate_hire_candidate_list() -> void:
+	_clear_children(inventory_card_list)
+	var candidates := _get_hire_candidates()
+
+	if candidates.is_empty():
+		inventory_card_list.add_child(_make_empty_label("No available personnel."))
+		return
+
+	for card in candidates:
+		inventory_card_list.add_child(_make_hire_candidate_row(card))
+
+
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 	var filtered: Array[CardDefinition] = []
 
@@ -592,6 +679,17 @@ func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 
 	filtered.sort_custom(Callable(self, "_sort_cards_by_label"))
 	return filtered
+
+
+func _get_hire_candidates() -> Array[CardDefinition]:
+	var candidates: Array[CardDefinition] = []
+
+	for card in ContentCatalog.cards:
+		if card != null and card.is_character() and not GameState.office.owned_cards.has(card):
+			candidates.append(card)
+
+	candidates.sort_custom(Callable(self, "_sort_cards_by_label"))
+	return candidates
 
 
 func _sort_cards_by_label(first: CardDefinition, second: CardDefinition) -> bool:
@@ -716,6 +814,10 @@ func _on_reset_pressed() -> void:
 	GameState.reset_game()
 
 
+func _on_personnel_pressed() -> void:
+	_toggle_inventory_drawer(GameEnums.CardType.CHARACTER)
+
+
 func _on_equipment_pressed() -> void:
 	_toggle_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
@@ -744,3 +846,9 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 				expanded_character_card_ids[card_id] = true
 
 			_refresh_character_cards()
+
+
+func _on_hire_pressed(card_id: StringName) -> void:
+	var card := ContentCatalog.get_card(card_id)
+	if GameState.hire_card(card):
+		_refresh()

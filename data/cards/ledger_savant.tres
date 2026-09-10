@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_stats"]
+script = ExtResource("2_stats")
+strength = 0
+agility = 1
+intelligence = 6
+charm = 2
+health = 15
+
+[resource]
+script = ExtResource("1_card")
+id = &"ledger_savant"
+display_name = "Ledger Savant"
+card_type = 0
+stats = SubResource("Resource_stats")
+skill_ids = PackedStringArray("audit", "forecast")
+weekly_wage = 22
+job = &"Analyst"
+tags = PackedStringArray("hireable", "character")
