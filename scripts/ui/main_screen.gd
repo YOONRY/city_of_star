@@ -11,10 +11,12 @@ var card_count_value: Label
 var request_count_value: Label
 var status_label: Label
 var event_list: VBoxContainer
+var action_panel: PanelContainer
 var next_day_button: Button
 var pay_tax_button: Button
 var reset_button: Button
 var character_card_list: VBoxContainer
+var inventory_panel: PanelContainer
 var inventory_drawer: PanelContainer
 var inventory_drawer_title: Label
 var inventory_card_list: VBoxContainer
@@ -118,7 +120,7 @@ func _build_ui() -> void:
 	right_column.add_theme_constant_override("separation", 14)
 	body.add_child(right_column)
 
-	var action_panel := _make_panel()
+	action_panel = _make_panel()
 	action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_column.add_child(action_panel)
 
@@ -159,7 +161,7 @@ func _build_ui() -> void:
 	status_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	action_box.add_child(status_label)
 
-	var inventory_panel := _make_panel()
+	inventory_panel = _make_panel()
 	inventory_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_column.add_child(inventory_panel)
@@ -402,9 +404,11 @@ func _refresh_event_list() -> void:
 
 func _refresh_inventory_drawer() -> void:
 	if active_drawer_type == NO_ACTIVE_DRAWER:
+		action_panel.visible = true
 		inventory_drawer.visible = false
 		return
 
+	action_panel.visible = false
 	inventory_drawer.visible = true
 
 	if active_drawer_type == GameEnums.CardType.EQUIPMENT:
