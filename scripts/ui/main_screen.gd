@@ -10,6 +10,7 @@ var tax_value: Label
 var card_count_value: Label
 var request_count_value: Label
 var status_label: Label
+var event_list: VBoxContainer
 var next_day_button: Button
 var pay_tax_button: Button
 var reset_button: Button
@@ -46,12 +47,26 @@ func _build_ui() -> void:
 	layout.add_theme_constant_override("separation", 20)
 	root.add_child(layout)
 
-	var title := _make_label("City of Star", 34)
-	layout.add_child(title)
+	var top_bar := HBoxContainer.new()
+	top_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	layout.add_child(top_bar)
 
-	var subtitle := _make_label("Office Management Prototype", 16)
-	subtitle.add_theme_color_override("font_color", Color("#D7DEE8"))
-	layout.add_child(subtitle)
+	var top_spacer := Control.new()
+	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_bar.add_child(top_spacer)
+
+	var calendar_panel := _make_panel(Color("#14202A"), Color("#2F4659"))
+	top_bar.add_child(calendar_panel)
+
+	var calendar_metrics := GridContainer.new()
+	calendar_metrics.columns = 6
+	calendar_metrics.add_theme_constant_override("h_separation", 12)
+	calendar_metrics.add_theme_constant_override("v_separation", 4)
+	calendar_panel.add_child(calendar_metrics)
+
+	day_value = _add_metric(calendar_metrics, "Day")
+	week_value = _add_metric(calendar_metrics, "Week")
+	weekday_value = _add_metric(calendar_metrics, "Weekday")
 
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 18)
@@ -78,34 +93,25 @@ func _build_ui() -> void:
 	character_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_scroll.add_child(character_card_list)
 
-	var status_panel := _make_panel()
-	status_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(status_panel)
+	var event_panel := _make_panel()
+	event_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(event_panel)
 
-	var status_box := VBoxContainer.new()
-	status_box.add_theme_constant_override("separation", 14)
-	status_panel.add_child(status_box)
+	var event_box := VBoxContainer.new()
+	event_box.add_theme_constant_override("separation", 14)
+	event_panel.add_child(event_box)
 
-	status_box.add_child(_make_section_title("Office"))
+	event_box.add_child(_make_section_title("Events"))
 
-	var metrics := GridContainer.new()
-	metrics.columns = 2
-	metrics.add_theme_constant_override("h_separation", 28)
-	metrics.add_theme_constant_override("v_separation", 10)
-	status_box.add_child(metrics)
+	var event_scroll := ScrollContainer.new()
+	event_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	event_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	event_box.add_child(event_scroll)
 
-	day_value = _add_metric(metrics, "Day")
-	week_value = _add_metric(metrics, "Week")
-	weekday_value = _add_metric(metrics, "Weekday")
-	money_value = _add_metric(metrics, "Money")
-	tax_value = _add_metric(metrics, "Tax")
-	card_count_value = _add_metric(metrics, "Cards")
-	request_count_value = _add_metric(metrics, "Requests")
-
-	status_label = _make_label("", 15)
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	status_box.add_child(status_label)
+	event_list = VBoxContainer.new()
+	event_list.add_theme_constant_override("separation", 10)
+	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_scroll.add_child(event_list)
 
 	var right_column := VBoxContainer.new()
 	right_column.custom_minimum_size = Vector2(300, 0)
@@ -136,6 +142,22 @@ func _build_ui() -> void:
 	reset_button.text = "Reset"
 	reset_button.pressed.connect(_on_reset_pressed)
 	action_box.add_child(reset_button)
+
+	var office_metrics := GridContainer.new()
+	office_metrics.columns = 2
+	office_metrics.add_theme_constant_override("h_separation", 20)
+	office_metrics.add_theme_constant_override("v_separation", 8)
+	action_box.add_child(office_metrics)
+
+	money_value = _add_metric(office_metrics, "Money")
+	tax_value = _add_metric(office_metrics, "Tax")
+	card_count_value = _add_metric(office_metrics, "Cards")
+	request_count_value = _add_metric(office_metrics, "Events")
+
+	status_label = _make_label("", 13)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	action_box.add_child(status_label)
 
 	var inventory_panel := _make_panel()
 	inventory_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -246,6 +268,47 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 	return row
 
 
+func _make_event_row(request: RequestDefinition) -> PanelContainer:
+	var row := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#202C35")
+	style.border_color = Color("#3A5365")
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	row.add_child(box)
+
+	var title_label := _make_label(request.label(), 15)
+	title_label.clip_text = true
+	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	box.add_child(title_label)
+
+	var meta_label := _make_label(_event_meta(request), 12)
+	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(meta_label)
+
+	var reward_label := _make_label(_event_rewards(request), 12)
+	reward_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	box.add_child(reward_label)
+
+	return row
+
+
 func _make_empty_label(text: String) -> Label:
 	var label := _make_label(text, 13)
 	label.add_theme_color_override("font_color", Color("#7F8D9B"))
@@ -312,6 +375,7 @@ func _refresh() -> void:
 	pay_tax_button.disabled = not tax_can_be_paid
 	next_day_button.disabled = GameState.is_game_over
 	_refresh_character_cards()
+	_refresh_event_list()
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
 
@@ -328,6 +392,12 @@ func _refresh() -> void:
 func _refresh_character_cards() -> void:
 	var character_cards := _get_cards_by_type(GameEnums.CardType.CHARACTER)
 	_populate_card_list(character_card_list, character_cards, "No character cards.")
+
+
+func _refresh_event_list() -> void:
+	var requests := ContentCatalog.requests.duplicate()
+	requests.sort_custom(Callable(self, "_sort_requests_by_label"))
+	_populate_event_list(requests)
 
 
 func _refresh_inventory_drawer() -> void:
@@ -369,6 +439,18 @@ func _populate_card_list(container: VBoxContainer, cards: Array[CardDefinition],
 		container.add_child(_make_card_row(card))
 
 
+func _populate_event_list(requests: Array) -> void:
+	_clear_children(event_list)
+
+	if requests.is_empty():
+		event_list.add_child(_make_empty_label("No events."))
+		return
+
+	for request in requests:
+		if request is RequestDefinition:
+			event_list.add_child(_make_event_row(request))
+
+
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 	var filtered: Array[CardDefinition] = []
 
@@ -381,6 +463,10 @@ func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 
 
 func _sort_cards_by_label(first: CardDefinition, second: CardDefinition) -> bool:
+	return first.label().naturalnocasecmp_to(second.label()) < 0
+
+
+func _sort_requests_by_label(first: RequestDefinition, second: RequestDefinition) -> bool:
 	return first.label().naturalnocasecmp_to(second.label()) < 0
 
 
@@ -419,6 +505,29 @@ func _format_stats(stats: StatBlock) -> String:
 		stats.agility,
 		stats.intelligence,
 		stats.charm,
+	]
+
+
+func _event_meta(request: RequestDefinition) -> String:
+	var parts: PackedStringArray = [
+		GameEnums.request_type_label(request.request_type),
+		"%s days" % request.duration_days,
+		"valid %s days" % request.valid_days,
+	]
+
+	if request.repeatable_after_expiry:
+		parts.append("repeatable")
+
+	if not request.tags.is_empty():
+		parts.append(", ".join(request.tags))
+
+	return " / ".join(parts)
+
+
+func _event_rewards(request: RequestDefinition) -> String:
+	return "Reward %s money / %s reputation" % [
+		request.reward_money,
+		request.reward_reputation,
 	]
 
 
