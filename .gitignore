@@ -1,5 +1,8 @@
 .godot/
 .import/
+.mono/
+Godot_v*/
+*.import
 export/
 exports/
 *.tmp
