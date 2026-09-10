@@ -9,6 +9,7 @@ signal game_over(reason: String)
 const STARTING_MONEY := 100
 const STARTING_WEEKLY_TAX := 80
 const TAX_DUE_WEEKDAY := 7
+const STARTING_CARD_TAG := "starter"
 
 var current_day: int = 1
 var office := OfficeState.new()
@@ -24,6 +25,7 @@ func reset_game() -> void:
 	current_day = 1
 	office = OfficeState.new()
 	office.reset(STARTING_MONEY)
+	_seed_starting_cards()
 	tax_manager = TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
 	is_game_over = false
 	game_over_reason = ""
@@ -80,6 +82,12 @@ func get_week() -> int:
 
 func get_weekday() -> int:
 	return tax_manager.weekday(current_day)
+
+
+func _seed_starting_cards() -> void:
+	for card in ContentCatalog.cards:
+		if card != null and card.tags.has(STARTING_CARD_TAG):
+			office.add_card(card)
 
 
 func _set_game_over(reason: String) -> void:

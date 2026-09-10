@@ -356,7 +356,7 @@ func _refresh() -> void:
 	week_value.text = str(GameState.get_week())
 	weekday_value.text = "%s / 7" % GameState.get_weekday()
 	money_value.text = str(GameState.office.money)
-	card_count_value.text = str(ContentCatalog.cards.size())
+	card_count_value.text = str(GameState.office.owned_cards.size())
 	request_count_value.text = str(ContentCatalog.requests.size())
 
 	var tax_text := str(GameState.tax_manager.weekly_tax)
@@ -383,7 +383,7 @@ func _refresh() -> void:
 		status_label.text = "Game Over: %s" % GameState.game_over_reason
 	elif tax_can_be_paid:
 		status_label.text = "Tax is due before the office can move to the next day."
-	elif ContentCatalog.cards.is_empty() and ContentCatalog.requests.is_empty():
+	elif GameState.office.owned_cards.is_empty() and ContentCatalog.requests.is_empty():
 		status_label.text = "The office is open. No cards or requests have entered the city yet."
 	else:
 		status_label.text = "The office is ready for daily operations."
@@ -454,7 +454,7 @@ func _populate_event_list(requests: Array) -> void:
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 	var filtered: Array[CardDefinition] = []
 
-	for card in ContentCatalog.cards:
+	for card in GameState.office.owned_cards:
 		if card != null and card.card_type == card_type:
 			filtered.append(card)
 

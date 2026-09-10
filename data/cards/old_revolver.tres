@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_stats"]
+script = ExtResource("2_stats")
+strength = 3
+agility = 0
+intelligence = 0
+charm = 0
+
+[resource]
+script = ExtResource("1_card")
+id = &"old_revolver"
+display_name = "Old Revolver"
+card_type = 1
+stats = SubResource("Resource_stats")
+skill_ids = PackedStringArray()
+weekly_wage = 0
+job = &""
+tags = PackedStringArray("starter", "equipment")
