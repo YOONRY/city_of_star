@@ -603,6 +603,8 @@ func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	style.content_margin_bottom = 12
 	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -638,6 +640,8 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	style.content_margin_bottom = 12
 	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.gui_input.connect(_on_event_row_gui_input.bind(TAX_PAYMENT_EVENT_ID))
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -1164,6 +1168,17 @@ func _on_next_day_pressed() -> void:
 
 
 func _on_event_title_pressed(event_id: StringName) -> void:
+	_toggle_event_detail(event_id)
+
+
+func _on_event_row_gui_input(event: InputEvent, event_id: StringName) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			_toggle_event_detail(event_id)
+
+
+func _toggle_event_detail(event_id: StringName) -> void:
 	is_selecting_tax_event_money = false
 
 	if selected_event_id == event_id:
