@@ -5,7 +5,6 @@ const NO_ACTIVE_DRAWER := -1
 var day_value: Label
 var week_value: Label
 var weekday_value: Label
-var money_value: Label
 var tax_value: Label
 var card_count_value: Label
 var request_count_value: Label
@@ -154,7 +153,6 @@ func _build_ui() -> void:
 	office_metrics.add_theme_constant_override("v_separation", 8)
 	action_box.add_child(office_metrics)
 
-	money_value = _add_metric(office_metrics, "Money")
 	tax_value = _add_metric(office_metrics, "Tax")
 	card_count_value = _add_metric(office_metrics, "Cards")
 	request_count_value = _add_metric(office_metrics, "Events")
@@ -287,6 +285,97 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 	box.add_child(stat_label)
 
 	return row
+
+
+func _make_money_stack_card() -> PanelContainer:
+	var row := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#24313A")
+	style.border_color = Color("#D6A64F")
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.tooltip_text = "Current office funds are shown as a stack and cannot be consumed."
+
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	row.add_child(box)
+
+	var stack_visual := Control.new()
+	stack_visual.custom_minimum_size = Vector2(78, 64)
+	box.add_child(stack_visual)
+
+	stack_visual.add_child(_make_money_stack_layer(Vector2(18, 0), Color("#18222C"), Color("#4A6577"), "", 10))
+	stack_visual.add_child(_make_money_stack_layer(Vector2(10, 8), Color("#202D36"), Color("#738898"), "", 10))
+	stack_visual.add_child(_make_money_stack_layer(Vector2(2, 16), Color("#34414A"), Color("#D6A64F"), "$", 22))
+
+	var summary := VBoxContainer.new()
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	summary.add_theme_constant_override("separation", 4)
+	box.add_child(summary)
+
+	var name_label := _make_label("Office Funds", 15)
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	summary.add_child(name_label)
+
+	var amount_label := _make_label("%s money" % GameState.office.money, 22)
+	amount_label.add_theme_color_override("font_color", Color("#F4C95D"))
+	summary.add_child(amount_label)
+
+	var meta_label := _make_label("Currency stack / current balance", 12)
+	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.add_child(meta_label)
+
+	return row
+
+
+func _make_money_stack_layer(offset: Vector2, background_color: Color, border_color: Color, text: String, font_size: int) -> PanelContainer:
+	var layer := PanelContainer.new()
+	layer.position = offset
+	layer.custom_minimum_size = Vector2(56, 42)
+	layer.size = Vector2(56, 42)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = background_color
+	style.border_color = border_color
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	style.corner_radius_bottom_right = 5
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	layer.add_theme_stylebox_override("panel", style)
+
+	if not text.is_empty():
+		var label := _make_label(text, font_size)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		label.add_theme_color_override("font_color", Color("#F4C95D"))
+		layer.add_child(label)
+
+	return layer
 
 
 func _make_character_card_row(card: CardDefinition) -> PanelContainer:
@@ -575,7 +664,6 @@ func _refresh() -> void:
 	day_value.text = str(GameState.current_day)
 	week_value.text = str(GameState.get_week())
 	weekday_value.text = "%s / 7" % GameState.get_weekday()
-	money_value.text = str(GameState.office.money)
 	card_count_value.text = str(GameState.office.owned_cards.size())
 	request_count_value.text = str(ContentCatalog.requests.size())
 
@@ -641,11 +729,7 @@ func _refresh_inventory_drawer() -> void:
 		)
 	elif active_drawer_type == GameEnums.CardType.CONSUMABLE:
 		inventory_drawer_title.text = "Consumable Cards"
-		_populate_card_list(
-			inventory_card_list,
-			_get_cards_by_type(GameEnums.CardType.CONSUMABLE),
-			"No consumable cards."
-		)
+		_populate_consumable_card_list()
 
 
 func _refresh_inventory_buttons() -> void:
@@ -687,6 +771,19 @@ func _populate_hire_candidate_list() -> void:
 
 	for card in candidates:
 		inventory_card_list.add_child(_make_hire_candidate_row(card))
+
+
+func _populate_consumable_card_list() -> void:
+	_clear_children(inventory_card_list)
+	inventory_card_list.add_child(_make_money_stack_card())
+
+	var consumable_cards := _get_cards_by_type(GameEnums.CardType.CONSUMABLE)
+	if consumable_cards.is_empty():
+		inventory_card_list.add_child(_make_empty_label("No consumable cards."))
+		return
+
+	for card in consumable_cards:
+		inventory_card_list.add_child(_make_card_row(card))
 
 
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
