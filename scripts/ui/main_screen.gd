@@ -1,6 +1,7 @@
 extends Control
 
 const NO_ACTIVE_DRAWER := -1
+const TAX_PAYMENT_EVENT_ID := &"tax_payment"
 
 var day_value: Label
 var week_value: Label
@@ -23,6 +24,7 @@ var personnel_button: Button
 var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
+var selected_event_id: StringName = &""
 var is_selecting_tax_event_money: bool = false
 var tax_event_money_assigned: bool = false
 var expanded_character_card_ids: Dictionary = {}
@@ -581,53 +583,12 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 
 
 func _make_event_row(request: RequestDefinition) -> PanelContainer:
+	var event_id := _request_event_id(request)
+	var is_selected := selected_event_id == event_id
 	var row := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#202C35")
-	style.border_color = Color("#3A5365")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	row.add_theme_stylebox_override("panel", style)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 6)
-	row.add_child(box)
-
-	var title_label := _make_label(request.label(), 15)
-	title_label.clip_text = true
-	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	box.add_child(title_label)
-
-	var meta_label := _make_label(_event_meta(request), 12)
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
-	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(meta_label)
-
-	var reward_label := _make_label(_event_rewards(request), 12)
-	reward_label.add_theme_color_override("font_color", Color("#D7DEE8"))
-	box.add_child(reward_label)
-
-	return row
-
-
-func _make_tax_payment_event_row() -> PanelContainer:
-	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
-	var can_resolve := _can_resolve_tax_event()
-	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#202C35") if not is_paid else Color("#20352C")
-	style.border_color = _tax_event_border_color(is_paid, can_resolve)
+	style.bg_color = Color("#202C35") if not is_selected else Color("#243542")
+	style.border_color = Color("#3A5365") if not is_selected else Color("#F4C95D")
 	style.border_width_left = 1
 	style.border_width_right = 1
 	style.border_width_top = 1
@@ -647,6 +608,46 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
 
+	box.add_child(_make_event_title_button(request.label(), event_id, is_selected))
+
+	if is_selected:
+		box.add_child(_make_request_event_detail(request))
+
+	return row
+
+
+func _make_tax_payment_event_row() -> PanelContainer:
+	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
+	var can_resolve := _can_resolve_tax_event()
+	var is_selected := selected_event_id == TAX_PAYMENT_EVENT_ID
+	var row := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#202C35") if not is_paid else Color("#20352C")
+	style.border_color = _tax_event_border_color(is_paid, can_resolve, is_selected)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
+
+	box.add_child(_make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected))
+
+	if not is_selected:
+		return row
+
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	box.add_child(header)
@@ -654,10 +655,6 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	var title_box := VBoxContainer.new()
 	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title_box)
-
-	var title_label := _make_label("세금 납부", 17)
-	title_label.add_theme_color_override("font_color", Color("#F4C95D"))
-	title_box.add_child(title_label)
 
 	var meta_label := _make_label(_tax_event_meta(), 12)
 	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
@@ -676,8 +673,8 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	slot_row.add_theme_constant_override("separation", 10)
 	box.add_child(slot_row)
 
-	slot_row.add_child(_make_tax_slot_button("인물", "필요 없음", true, Callable()))
-	slot_row.add_child(_make_tax_slot_button("소비", _tax_consumable_slot_text(), is_paid, Callable(self, "_on_tax_consumable_slot_pressed")))
+	slot_row.add_child(_make_event_slot_button("인물", "필요 없음", true, Callable()))
+	slot_row.add_child(_make_event_slot_button("소비", _tax_consumable_slot_text(), is_paid, Callable(self, "_on_tax_consumable_slot_pressed")))
 
 	var status_label := _make_label(_tax_event_status_text(), 12)
 	status_label.add_theme_color_override("font_color", _tax_event_status_color(is_paid, can_resolve))
@@ -687,7 +684,48 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	return row
 
 
-func _make_tax_slot_button(title: String, detail: String, disabled: bool, callback: Callable) -> Button:
+func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
+	var detail := VBoxContainer.new()
+	detail.add_theme_constant_override("separation", 8)
+
+	var meta_label := _make_label(_event_meta(request), 12)
+	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.add_child(meta_label)
+
+	var reward_label := _make_label(_event_rewards(request), 12)
+	reward_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	detail.add_child(reward_label)
+
+	var slot_row := HBoxContainer.new()
+	slot_row.add_theme_constant_override("separation", 10)
+	detail.add_child(slot_row)
+
+	slot_row.add_child(_make_event_slot_button("인물", "미배치", true, Callable()))
+	slot_row.add_child(_make_event_slot_button("소비", "미배치", true, Callable()))
+
+	var status_label := _make_label("아직 일반 의뢰의 카드 배치 처리는 연결되지 않았습니다.", 12)
+	status_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.add_child(status_label)
+
+	return detail
+
+
+func _make_event_title_button(title: String, event_id: StringName, is_selected: bool) -> Button:
+	var button := Button.new()
+	button.text = title
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.custom_minimum_size = Vector2(0, 38)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+	button.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
+	button.add_theme_font_size_override("font_size", 15)
+	button.pressed.connect(_on_event_title_pressed.bind(event_id))
+	return button
+
+
+func _make_event_slot_button(title: String, detail: String, disabled: bool, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = "%s\n%s" % [title, detail]
 	button.disabled = disabled
@@ -701,7 +739,7 @@ func _make_tax_slot_button(title: String, detail: String, disabled: bool, callba
 	return button
 
 
-func _tax_event_border_color(is_paid: bool, can_resolve: bool) -> Color:
+func _tax_event_border_color(is_paid: bool, can_resolve: bool, is_selected: bool) -> Color:
 	if is_paid:
 		return Color("#60A878")
 
@@ -710,6 +748,9 @@ func _tax_event_border_color(is_paid: bool, can_resolve: bool) -> Color:
 
 	if is_selecting_tax_event_money:
 		return Color("#D6A64F")
+
+	if is_selected:
+		return Color("#F4C95D")
 
 	return Color("#3A5365")
 
@@ -979,6 +1020,14 @@ func _sort_requests_by_label(first: RequestDefinition, second: RequestDefinition
 	return first.label().naturalnocasecmp_to(second.label()) < 0
 
 
+func _request_event_id(request: RequestDefinition) -> StringName:
+	var raw_id := String(request.id)
+	if raw_id.is_empty():
+		raw_id = request.label()
+
+	return StringName("request:%s" % raw_id)
+
+
 func _clear_children(container: Node) -> void:
 	for child in container.get_children():
 		container.remove_child(child)
@@ -1084,8 +1133,22 @@ func _on_next_day_pressed() -> void:
 	GameState.advance_day()
 
 
+func _on_event_title_pressed(event_id: StringName) -> void:
+	is_selecting_tax_event_money = false
+
+	if selected_event_id == event_id:
+		selected_event_id = &""
+	else:
+		selected_event_id = event_id
+
+	_refresh_event_list()
+	_refresh_inventory_drawer()
+	_refresh_inventory_buttons()
+
+
 func _on_reset_pressed() -> void:
 	expanded_character_card_ids.clear()
+	selected_event_id = &""
 	is_selecting_tax_event_money = false
 	tax_event_money_assigned = false
 	GameState.reset_game()
@@ -1110,6 +1173,7 @@ func _on_tax_consumable_slot_pressed() -> void:
 	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
 		return
 
+	selected_event_id = TAX_PAYMENT_EVENT_ID
 	is_selecting_tax_event_money = true
 	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
 
