@@ -19,6 +19,7 @@ var character_card_list: VBoxContainer
 var inventory_panel: PanelContainer
 var inventory_drawer: PanelContainer
 var inventory_drawer_title: Label
+var inventory_close_button: Button
 var inventory_card_list: VBoxContainer
 var personnel_button: Button
 var equipment_button: Button
@@ -199,9 +200,18 @@ func _build_ui() -> void:
 	drawer_box.add_theme_constant_override("separation", 10)
 	inventory_drawer.add_child(drawer_box)
 
+	var drawer_header := HBoxContainer.new()
+	drawer_header.add_theme_constant_override("separation", 10)
+	drawer_box.add_child(drawer_header)
+
 	inventory_drawer_title = _make_label("", 16)
 	inventory_drawer_title.add_theme_color_override("font_color", Color("#F4C95D"))
-	drawer_box.add_child(inventory_drawer_title)
+	inventory_drawer_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	drawer_header.add_child(inventory_drawer_title)
+
+	inventory_close_button = _make_close_button()
+	inventory_close_button.pressed.connect(_close_inventory_drawer)
+	drawer_header.add_child(inventory_close_button)
 
 	var inventory_scroll := ScrollContainer.new()
 	inventory_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -528,6 +538,15 @@ func _make_icon_button(icon_path: String, tooltip: String) -> Button:
 	return button
 
 
+func _make_close_button() -> Button:
+	var button := Button.new()
+	button.text = "X"
+	button.tooltip_text = "Close"
+	button.custom_minimum_size = Vector2(32, 32)
+	button.focus_mode = Control.FOCUS_NONE
+	return button
+
+
 func _make_label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -815,25 +834,57 @@ func _on_reset_pressed() -> void:
 
 
 func _on_personnel_pressed() -> void:
-	_toggle_inventory_drawer(GameEnums.CardType.CHARACTER)
+	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
 
 
 func _on_equipment_pressed() -> void:
-	_toggle_inventory_drawer(GameEnums.CardType.EQUIPMENT)
+	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
 
 func _on_consumable_pressed() -> void:
-	_toggle_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
 
 
-func _toggle_inventory_drawer(card_type: int) -> void:
-	if active_drawer_type == card_type:
-		active_drawer_type = NO_ACTIVE_DRAWER
-	else:
-		active_drawer_type = card_type
+func _open_inventory_drawer(card_type: int) -> void:
+	active_drawer_type = card_type
 
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
+
+
+func _close_inventory_drawer() -> void:
+	active_drawer_type = NO_ACTIVE_DRAWER
+	_refresh_inventory_drawer()
+	_refresh_inventory_buttons()
+
+
+func _input(event: InputEvent) -> void:
+	if active_drawer_type == NO_ACTIVE_DRAWER:
+		return
+
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
+			return
+
+		if _is_inventory_drawer_click(mouse_event.position):
+			return
+
+		_close_inventory_drawer()
+		get_viewport().set_input_as_handled()
+
+
+func _is_inventory_drawer_click(position: Vector2) -> bool:
+	return (
+		_is_point_in_control(inventory_drawer, position)
+		or _is_point_in_control(personnel_button, position)
+		or _is_point_in_control(equipment_button, position)
+		or _is_point_in_control(consumable_button, position)
+	)
+
+
+func _is_point_in_control(control: Control, position: Vector2) -> bool:
+	return control != null and control.is_visible_in_tree() and control.get_global_rect().has_point(position)
 
 
 func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> void:
