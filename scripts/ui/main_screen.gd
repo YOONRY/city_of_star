@@ -643,7 +643,12 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
 
-	box.add_child(_make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected))
+	var title_button := _make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected)
+	if is_paid:
+		title_button.add_theme_color_override("font_color", Color("#B7F6C7"))
+		title_button.add_theme_color_override("font_hover_color", Color("#D8FFE1"))
+		title_button.add_theme_color_override("font_pressed_color", Color("#8DDEAA"))
+	box.add_child(title_button)
 
 	if not is_selected:
 		return row
@@ -1227,7 +1232,9 @@ func _on_tax_event_resolve_pressed() -> void:
 
 	if GameState.pay_current_week_tax():
 		tax_event_money_assigned = false
+		selected_event_id = &""
 		_close_inventory_drawer()
+		_refresh()
 	else:
 		_refresh()
 
