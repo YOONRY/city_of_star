@@ -76,6 +76,26 @@ func pay_weekly_tax() -> bool:
 	return true
 
 
+func can_pay_current_week_tax() -> bool:
+	if is_game_over:
+		return false
+
+	if tax_manager.has_paid_current_week(current_day):
+		return false
+
+	return office.money >= tax_manager.weekly_tax
+
+
+func pay_current_week_tax() -> bool:
+	if not can_pay_current_week_tax():
+		return false
+
+	office.money -= tax_manager.weekly_tax
+	tax_manager.mark_paid(current_day)
+	state_changed.emit()
+	return true
+
+
 func can_hire_card(card: CardDefinition) -> bool:
 	if is_game_over or card == null or not card.is_character():
 		return false

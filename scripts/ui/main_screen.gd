@@ -12,7 +12,6 @@ var status_label: Label
 var event_list: VBoxContainer
 var action_panel: PanelContainer
 var next_day_button: Button
-var pay_tax_button: Button
 var reset_button: Button
 var character_card_list: VBoxContainer
 var inventory_panel: PanelContainer
@@ -24,6 +23,8 @@ var personnel_button: Button
 var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
+var is_selecting_tax_event_money: bool = false
+var tax_event_money_assigned: bool = false
 var expanded_character_card_ids: Dictionary = {}
 
 func _ready() -> void:
@@ -136,11 +137,6 @@ func _build_ui() -> void:
 	next_day_button.text = "Next Day"
 	next_day_button.pressed.connect(_on_next_day_pressed)
 	action_box.add_child(next_day_button)
-
-	pay_tax_button = Button.new()
-	pay_tax_button.text = "Pay Tax"
-	pay_tax_button.pressed.connect(_on_pay_tax_pressed)
-	action_box.add_child(pay_tax_button)
 
 	reset_button = Button.new()
 	reset_button.text = "Reset"
@@ -288,10 +284,14 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 
 
 func _make_money_stack_card() -> PanelContainer:
+	var is_tax_target := is_selecting_tax_event_money
+	var tax_amount := GameState.tax_manager.weekly_tax
+	var is_current_week_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
+	var can_assign_money := is_tax_target and not is_current_week_paid and GameState.office.money >= tax_amount
 	var row := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#24313A")
-	style.border_color = Color("#D6A64F")
+	style.border_color = Color("#F4C95D") if can_assign_money else Color("#D6A64F")
 	style.border_width_left = 1
 	style.border_width_right = 1
 	style.border_width_top = 1
@@ -306,7 +306,9 @@ func _make_money_stack_card() -> PanelContainer:
 	style.content_margin_bottom = 10
 	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.tooltip_text = "Current office funds are shown as a stack and cannot be consumed."
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.tooltip_text = "Click to place funds into the tax event." if can_assign_money else "Current office funds are shown as a stack."
+	row.gui_input.connect(_on_money_stack_gui_input)
 
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
@@ -334,11 +336,21 @@ func _make_money_stack_card() -> PanelContainer:
 	amount_label.add_theme_color_override("font_color", Color("#F4C95D"))
 	summary.add_child(amount_label)
 
-	var meta_label := _make_label("Currency stack / current balance", 12)
+	var meta_text := "Currency stack / current balance"
+	if is_tax_target:
+		if is_current_week_paid:
+			meta_text = "Current week's tax is already paid"
+		elif can_assign_money:
+			meta_text = "Ready to place %s money into tax event" % tax_amount
+		else:
+			meta_text = "Need %s more money for tax event" % maxi(0, tax_amount - GameState.office.money)
+
+	var meta_label := _make_label(meta_text, 12)
 	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_child(meta_label)
 
+	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 	return row
 
 
@@ -609,6 +621,143 @@ func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	return row
 
 
+func _make_tax_payment_event_row() -> PanelContainer:
+	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
+	var can_resolve := _can_resolve_tax_event()
+	var row := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#202C35") if not is_paid else Color("#20352C")
+	style.border_color = _tax_event_border_color(is_paid, can_resolve)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	row.add_theme_stylebox_override("panel", style)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	box.add_child(header)
+
+	var title_box := VBoxContainer.new()
+	title_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_box)
+
+	var title_label := _make_label("세금 납부", 17)
+	title_label.add_theme_color_override("font_color", Color("#F4C95D"))
+	title_box.add_child(title_label)
+
+	var meta_label := _make_label(_tax_event_meta(), 12)
+	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title_box.add_child(meta_label)
+
+	var resolve_button := Button.new()
+	resolve_button.text = "완료" if is_paid else "납부"
+	resolve_button.disabled = not can_resolve
+	resolve_button.custom_minimum_size = Vector2(88, 34)
+	resolve_button.focus_mode = Control.FOCUS_NONE
+	resolve_button.pressed.connect(_on_tax_event_resolve_pressed)
+	header.add_child(resolve_button)
+
+	var slot_row := HBoxContainer.new()
+	slot_row.add_theme_constant_override("separation", 10)
+	box.add_child(slot_row)
+
+	slot_row.add_child(_make_tax_slot_button("인물", "필요 없음", true, Callable()))
+	slot_row.add_child(_make_tax_slot_button("소비", _tax_consumable_slot_text(), is_paid, Callable(self, "_on_tax_consumable_slot_pressed")))
+
+	var status_label := _make_label(_tax_event_status_text(), 12)
+	status_label.add_theme_color_override("font_color", _tax_event_status_color(is_paid, can_resolve))
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(status_label)
+
+	return row
+
+
+func _make_tax_slot_button(title: String, detail: String, disabled: bool, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = "%s\n%s" % [title, detail]
+	button.disabled = disabled
+	button.custom_minimum_size = Vector2(0, 72)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+
+	if not disabled and callback.is_valid():
+		button.pressed.connect(callback)
+
+	return button
+
+
+func _tax_event_border_color(is_paid: bool, can_resolve: bool) -> Color:
+	if is_paid:
+		return Color("#60A878")
+
+	if can_resolve:
+		return Color("#F4C95D")
+
+	if is_selecting_tax_event_money:
+		return Color("#D6A64F")
+
+	return Color("#3A5365")
+
+
+func _tax_event_meta() -> String:
+	return "Week %s / due day %s / tax %s money" % [
+		GameState.get_week(),
+		GameState.tax_manager.due_weekday,
+		GameState.tax_manager.weekly_tax,
+	]
+
+
+func _tax_consumable_slot_text() -> String:
+	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
+		return "납부 완료"
+
+	if tax_event_money_assigned:
+		return "%s money" % GameState.tax_manager.weekly_tax
+
+	return "자금 미배치"
+
+
+func _tax_event_status_text() -> String:
+	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
+		return "이번 주 세금 납부가 완료되었습니다."
+
+	if tax_event_money_assigned and _can_resolve_tax_event():
+		return "자금이 배치되었습니다. 납부를 눌러 이벤트를 넘길 수 있습니다."
+
+	if GameState.office.money < GameState.tax_manager.weekly_tax:
+		return "자금이 부족합니다. 필요한 금액: %s money" % GameState.tax_manager.weekly_tax
+
+	if is_selecting_tax_event_money:
+		return "소비 카드 목록에서 자금 스택을 선택하세요."
+
+	return "소비 슬롯에 현재 보유 금액을 배치해야 합니다."
+
+
+func _tax_event_status_color(is_paid: bool, can_resolve: bool) -> Color:
+	if is_paid:
+		return Color("#60A878")
+
+	if can_resolve:
+		return Color("#F4C95D")
+
+	return Color("#AAB6C2")
+
+
 func _make_empty_label(text: String) -> Label:
 	var label := _make_label(text, 13)
 	label.add_theme_color_override("font_color", Color("#7F8D9B"))
@@ -661,11 +810,12 @@ func _add_metric(grid: GridContainer, name: String) -> Label:
 
 
 func _refresh() -> void:
+	_sync_tax_event_state()
 	day_value.text = str(GameState.current_day)
 	week_value.text = str(GameState.get_week())
 	weekday_value.text = "%s / 7" % GameState.get_weekday()
 	card_count_value.text = str(GameState.office.owned_cards.size())
-	request_count_value.text = str(ContentCatalog.requests.size())
+	request_count_value.text = str(ContentCatalog.requests.size() + 1)
 
 	var tax_text := str(GameState.tax_manager.weekly_tax)
 	if GameState.tax_manager.is_due(GameState.current_day):
@@ -680,7 +830,6 @@ func _refresh() -> void:
 		and not GameState.tax_manager.has_paid_current_week(GameState.current_day)
 		and not GameState.is_game_over
 	)
-	pay_tax_button.disabled = not tax_can_be_paid
 	next_day_button.disabled = GameState.is_game_over
 	_refresh_character_cards()
 	_refresh_event_list()
@@ -690,11 +839,25 @@ func _refresh() -> void:
 	if GameState.is_game_over:
 		status_label.text = "Game Over: %s" % GameState.game_over_reason
 	elif tax_can_be_paid:
-		status_label.text = "Tax is due before the office can move to the next day."
+		status_label.text = "Tax is due. Resolve the tax event before advancing."
 	elif GameState.office.owned_cards.is_empty() and ContentCatalog.requests.is_empty():
 		status_label.text = "The office is open. No cards or requests have entered the city yet."
 	else:
 		status_label.text = "The office is ready for daily operations."
+
+
+func _sync_tax_event_state() -> void:
+	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
+		tax_event_money_assigned = false
+		is_selecting_tax_event_money = false
+		return
+
+	if GameState.office.money < GameState.tax_manager.weekly_tax:
+		tax_event_money_assigned = false
+
+
+func _can_resolve_tax_event() -> bool:
+	return tax_event_money_assigned and GameState.can_pay_current_week_tax()
 
 
 func _refresh_character_cards() -> void:
@@ -751,9 +914,9 @@ func _populate_card_list(container: VBoxContainer, cards: Array[CardDefinition],
 
 func _populate_event_list(requests: Array) -> void:
 	_clear_children(event_list)
+	event_list.add_child(_make_tax_payment_event_row())
 
 	if requests.is_empty():
-		event_list.add_child(_make_empty_label("No events."))
 		return
 
 	for request in requests:
@@ -921,25 +1084,62 @@ func _on_next_day_pressed() -> void:
 	GameState.advance_day()
 
 
-func _on_pay_tax_pressed() -> void:
-	GameState.pay_weekly_tax()
-
-
 func _on_reset_pressed() -> void:
 	expanded_character_card_ids.clear()
+	is_selecting_tax_event_money = false
+	tax_event_money_assigned = false
 	GameState.reset_game()
 
 
 func _on_personnel_pressed() -> void:
+	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
 
 
 func _on_equipment_pressed() -> void:
+	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
 
 func _on_consumable_pressed() -> void:
+	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+
+
+func _on_tax_consumable_slot_pressed() -> void:
+	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
+		return
+
+	is_selecting_tax_event_money = true
+	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+
+
+func _on_money_stack_gui_input(event: InputEvent) -> void:
+	if not is_selecting_tax_event_money:
+		return
+
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
+			return
+
+		if GameState.can_pay_current_week_tax():
+			tax_event_money_assigned = true
+			_close_inventory_drawer()
+			_refresh()
+		else:
+			status_label.text = "Not enough money to place into the tax event."
+
+
+func _on_tax_event_resolve_pressed() -> void:
+	if not _can_resolve_tax_event():
+		return
+
+	if GameState.pay_current_week_tax():
+		tax_event_money_assigned = false
+		_close_inventory_drawer()
+	else:
+		_refresh()
 
 
 func _open_inventory_drawer(card_type: int) -> void:
@@ -951,6 +1151,7 @@ func _open_inventory_drawer(card_type: int) -> void:
 
 func _close_inventory_drawer() -> void:
 	active_drawer_type = NO_ACTIVE_DRAWER
+	is_selecting_tax_event_money = false
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
 
