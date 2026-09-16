@@ -16,6 +16,9 @@ var office := OfficeState.new()
 var tax_manager := TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
 var is_game_over: bool = false
 var game_over_reason: String = ""
+var last_tax_payment_day: int = 0
+var last_tax_payment_week: int = 0
+var last_tax_payment_amount: int = 0
 
 func _ready() -> void:
 	reset_game()
@@ -29,6 +32,7 @@ func reset_game() -> void:
 	tax_manager = TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
 	is_game_over = false
 	game_over_reason = ""
+	_clear_last_tax_payment()
 	state_changed.emit()
 
 
@@ -72,6 +76,7 @@ func pay_weekly_tax() -> bool:
 
 	office.money -= tax_manager.weekly_tax
 	tax_manager.mark_paid(current_day)
+	_record_tax_payment(tax_manager.weekly_tax)
 	state_changed.emit()
 	return true
 
@@ -92,6 +97,28 @@ func pay_current_week_tax() -> bool:
 
 	office.money -= tax_manager.weekly_tax
 	tax_manager.mark_paid(current_day)
+	_record_tax_payment(tax_manager.weekly_tax)
+	state_changed.emit()
+	return true
+
+
+func can_cancel_current_week_tax_payment() -> bool:
+	return (
+		not is_game_over
+		and last_tax_payment_day == current_day
+		and last_tax_payment_week == get_week()
+		and last_tax_payment_amount > 0
+		and tax_manager.has_paid_current_week(current_day)
+	)
+
+
+func cancel_current_week_tax_payment() -> bool:
+	if not can_cancel_current_week_tax_payment():
+		return false
+
+	office.money += last_tax_payment_amount
+	tax_manager.unmark_paid(current_day)
+	_clear_last_tax_payment()
 	state_changed.emit()
 	return true
 
@@ -135,6 +162,18 @@ func _seed_starting_cards() -> void:
 	for card in ContentCatalog.cards:
 		if card != null and card.tags.has(STARTING_CARD_TAG):
 			office.add_card(card)
+
+
+func _record_tax_payment(amount: int) -> void:
+	last_tax_payment_day = current_day
+	last_tax_payment_week = get_week()
+	last_tax_payment_amount = amount
+
+
+func _clear_last_tax_payment() -> void:
+	last_tax_payment_day = 0
+	last_tax_payment_week = 0
+	last_tax_payment_amount = 0
 
 
 func _set_game_over(reason: String) -> void:

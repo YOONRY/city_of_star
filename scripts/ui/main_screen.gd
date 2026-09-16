@@ -662,12 +662,20 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	title_box.add_child(meta_label)
 
 	var resolve_button := Button.new()
-	resolve_button.text = "완료" if is_paid else "납부"
+	resolve_button.text = _tax_event_action_label(is_paid)
 	resolve_button.disabled = not can_resolve
 	resolve_button.custom_minimum_size = Vector2(88, 34)
 	resolve_button.focus_mode = Control.FOCUS_NONE
 	resolve_button.pressed.connect(_on_tax_event_resolve_pressed)
 	header.add_child(resolve_button)
+
+	if _can_cancel_tax_event_action():
+		var cancel_button := Button.new()
+		cancel_button.text = "취소"
+		cancel_button.custom_minimum_size = Vector2(72, 34)
+		cancel_button.focus_mode = Control.FOCUS_NONE
+		cancel_button.pressed.connect(_on_tax_event_cancel_pressed)
+		header.add_child(cancel_button)
 
 	var slot_row := HBoxContainer.new()
 	slot_row.add_theme_constant_override("separation", 10)
@@ -773,12 +781,25 @@ func _tax_consumable_slot_text() -> String:
 	return "자금 미배치"
 
 
+func _tax_event_action_label(is_paid: bool) -> String:
+	if is_paid:
+		return "완료"
+
+	if tax_event_money_assigned:
+		return "실행"
+
+	return "납부"
+
+
 func _tax_event_status_text() -> String:
 	if GameState.tax_manager.has_paid_current_week(GameState.current_day):
+		if GameState.can_cancel_current_week_tax_payment():
+			return "세금 납부가 실행되었습니다. 다음 날로 넘기기 전까지 취소할 수 있습니다."
+
 		return "이번 주 세금 납부가 완료되었습니다."
 
 	if tax_event_money_assigned and _can_resolve_tax_event():
-		return "자금이 배치되었습니다. 납부를 눌러 이벤트를 넘길 수 있습니다."
+		return "자금이 배치되었습니다. 실행을 눌러 이벤트를 넘길 수 있습니다."
 
 	if GameState.office.money < GameState.tax_manager.weekly_tax:
 		return "자금이 부족합니다. 필요한 금액: %s money" % GameState.tax_manager.weekly_tax
@@ -899,6 +920,10 @@ func _sync_tax_event_state() -> void:
 
 func _can_resolve_tax_event() -> bool:
 	return tax_event_money_assigned and GameState.can_pay_current_week_tax()
+
+
+func _can_cancel_tax_event_action() -> bool:
+	return tax_event_money_assigned or GameState.can_cancel_current_week_tax_payment()
 
 
 func _refresh_character_cards() -> void:
@@ -1188,6 +1213,7 @@ func _on_money_stack_gui_input(event: InputEvent) -> void:
 			return
 
 		if GameState.can_pay_current_week_tax():
+			selected_event_id = TAX_PAYMENT_EVENT_ID
 			tax_event_money_assigned = true
 			_close_inventory_drawer()
 			_refresh()
@@ -1201,6 +1227,20 @@ func _on_tax_event_resolve_pressed() -> void:
 
 	if GameState.pay_current_week_tax():
 		tax_event_money_assigned = false
+		_close_inventory_drawer()
+	else:
+		_refresh()
+
+
+func _on_tax_event_cancel_pressed() -> void:
+	if tax_event_money_assigned:
+		tax_event_money_assigned = false
+		_close_inventory_drawer()
+		_refresh()
+		return
+
+	if GameState.cancel_current_week_tax_payment():
+		selected_event_id = TAX_PAYMENT_EVENT_ID
 		_close_inventory_drawer()
 	else:
 		_refresh()

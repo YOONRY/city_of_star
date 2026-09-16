@@ -28,3 +28,8 @@ func has_paid_current_week(day: int) -> bool:
 
 func mark_paid(day: int) -> void:
 	last_paid_week = current_week(day)
+
+
+func unmark_paid(day: int) -> void:
+	if last_paid_week == current_week(day):
+		last_paid_week = maxi(0, last_paid_week - 1)
