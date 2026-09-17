@@ -11,6 +11,9 @@ var card_count_value: Label
 var request_count_value: Label
 var status_label: Label
 var event_list: VBoxContainer
+var character_detail_popup: PanelContainer
+var character_detail_title: Label
+var character_detail_content: VBoxContainer
 var next_day_button: Button
 var character_panel: PanelContainer
 var character_card_list: VBoxContainer
@@ -23,10 +26,10 @@ var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
 var selected_event_id: StringName = &""
+var selected_character_card_id: StringName = &""
 var equipment_target_character_id: StringName = &""
 var is_selecting_tax_event_money: bool = false
 var tax_event_money_assigned: bool = false
-var expanded_character_card_ids: Dictionary = {}
 
 func _ready() -> void:
 	_build_ui()
@@ -82,9 +85,14 @@ func _build_ui() -> void:
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(body)
 
+	var event_stage := Control.new()
+	event_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(event_stage)
+
 	var event_panel := _make_panel()
-	event_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(event_panel)
+	event_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	event_stage.add_child(event_panel)
 
 	var event_box := VBoxContainer.new()
 	event_box.add_theme_constant_override("separation", 14)
@@ -105,6 +113,43 @@ func _build_ui() -> void:
 	event_list.add_theme_constant_override("separation", 10)
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
+
+	character_detail_popup = _make_panel(Color("#121B24"), Color("#F4C95D"))
+	character_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	character_detail_popup.offset_left = 28
+	character_detail_popup.offset_top = 28
+	character_detail_popup.offset_right = -28
+	character_detail_popup.offset_bottom = -28
+	character_detail_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	character_detail_popup.visible = false
+	event_stage.add_child(character_detail_popup)
+
+	var popup_box := VBoxContainer.new()
+	popup_box.add_theme_constant_override("separation", 12)
+	character_detail_popup.add_child(popup_box)
+
+	var popup_header := HBoxContainer.new()
+	popup_header.add_theme_constant_override("separation", 10)
+	popup_box.add_child(popup_header)
+
+	character_detail_title = _make_label("", 20)
+	character_detail_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	character_detail_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	popup_header.add_child(character_detail_title)
+
+	var character_detail_close_button := _make_close_button()
+	character_detail_close_button.pressed.connect(_close_character_detail_popup)
+	popup_header.add_child(character_detail_close_button)
+
+	var character_detail_scroll := ScrollContainer.new()
+	character_detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	character_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	popup_box.add_child(character_detail_scroll)
+
+	character_detail_content = VBoxContainer.new()
+	character_detail_content.add_theme_constant_override("separation", 12)
+	character_detail_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_detail_scroll.add_child(character_detail_content)
 
 	var right_column := VBoxContainer.new()
 	right_column.custom_minimum_size = Vector2(340, 0)
@@ -373,10 +418,10 @@ func _make_money_stack_layer(offset: Vector2, background_color: Color, border_co
 
 func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
-	var is_expanded := expanded_character_card_ids.has(card.id)
+	var is_selected := selected_character_card_id == card.id
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#21303C") if not is_expanded else Color("#263B49")
-	style.border_color = Color("#3A5365") if not is_expanded else Color("#F4C95D")
+	style.bg_color = Color("#21303C") if not is_selected else Color("#263B49")
+	style.border_color = Color("#3A5365") if not is_selected else Color("#F4C95D")
 	style.border_width_left = 1
 	style.border_width_right = 1
 	style.border_width_top = 1
@@ -392,7 +437,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.tooltip_text = "Click to toggle details."
+	row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
 	row.gui_input.connect(_on_character_card_gui_input.bind(card.id))
 
 	var box := VBoxContainer.new()
@@ -424,9 +469,6 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary.add_child(job_label)
-
-	if is_expanded:
-		box.add_child(_make_character_detail(card))
 
 	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 	_set_button_mouse_filter_recursive(box)
@@ -937,6 +979,7 @@ func _refresh() -> void:
 	)
 	next_day_button.disabled = GameState.is_game_over
 	_refresh_character_cards()
+	_refresh_character_detail_popup()
 	_refresh_event_list()
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
@@ -972,6 +1015,47 @@ func _can_cancel_tax_event_action() -> bool:
 func _refresh_character_cards() -> void:
 	var character_cards := _get_cards_by_type(GameEnums.CardType.CHARACTER)
 	_populate_card_list(character_card_list, character_cards, "No character cards.")
+
+
+func _refresh_character_detail_popup() -> void:
+	_clear_children(character_detail_content)
+
+	if String(selected_character_card_id).is_empty():
+		character_detail_title.text = ""
+		character_detail_popup.visible = false
+		return
+
+	var card := ContentCatalog.get_card(selected_character_card_id)
+	if card == null or not card.is_character() or not GameState.office.owned_cards.has(card):
+		selected_character_card_id = &""
+		character_detail_title.text = ""
+		character_detail_popup.visible = false
+		return
+
+	character_detail_popup.visible = true
+	character_detail_title.text = card.label()
+
+	var summary := HBoxContainer.new()
+	summary.add_theme_constant_override("separation", 14)
+	character_detail_content.add_child(summary)
+
+	summary.add_child(_make_profile_frame(card))
+
+	var summary_text := VBoxContainer.new()
+	summary_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	summary_text.add_theme_constant_override("separation", 5)
+	summary.add_child(summary_text)
+
+	var name_label := _make_label(card.label(), 24)
+	name_label.add_theme_color_override("font_color", Color("#F3F4F6"))
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary_text.add_child(name_label)
+
+	var job_label := _make_label(_character_job(card), 14)
+	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	summary_text.add_child(job_label)
+
+	character_detail_content.add_child(_make_character_detail(card))
 
 
 func _refresh_event_list() -> void:
@@ -1271,8 +1355,8 @@ func _toggle_event_detail(event_id: StringName) -> void:
 
 
 func _on_reset_pressed() -> void:
-	expanded_character_card_ids.clear()
 	selected_event_id = &""
+	selected_character_card_id = &""
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	tax_event_money_assigned = false
@@ -1299,7 +1383,7 @@ func _on_consumable_pressed() -> void:
 
 func _on_equipment_slot_pressed(character_id: StringName) -> void:
 	equipment_target_character_id = character_id
-	expanded_character_card_ids[character_id] = true
+	selected_character_card_id = character_id
 	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
@@ -1323,7 +1407,7 @@ func _on_equipment_card_gui_input(event: InputEvent, equipment_id: StringName) -
 		var character := ContentCatalog.get_card(equipment_target_character_id)
 		var equipment := ContentCatalog.get_card(equipment_id)
 		if GameState.equip_card(character, equipment):
-			expanded_character_card_ids[equipment_target_character_id] = true
+			selected_character_card_id = equipment_target_character_id
 			equipment_target_character_id = &""
 			_close_inventory_drawer()
 			_refresh()
@@ -1417,6 +1501,7 @@ func _input(event: InputEvent) -> void:
 func _is_inventory_drawer_click(position: Vector2) -> bool:
 	return (
 		_is_point_in_control(inventory_drawer, position)
+		or _is_point_in_control(character_detail_popup, position)
 		or _is_point_in_control(personnel_button, position)
 		or _is_point_in_control(equipment_button, position)
 		or _is_point_in_control(consumable_button, position)
@@ -1432,12 +1517,25 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
-			if expanded_character_card_ids.has(card_id):
-				expanded_character_card_ids.erase(card_id)
+			if selected_character_card_id == card_id:
+				selected_character_card_id = &""
 			else:
-				expanded_character_card_ids[card_id] = true
+				selected_character_card_id = card_id
 
 			_refresh_character_cards()
+			_refresh_character_detail_popup()
+
+
+func _close_character_detail_popup() -> void:
+	var was_selecting_equipment := not String(equipment_target_character_id).is_empty()
+	selected_character_card_id = &""
+	equipment_target_character_id = &""
+
+	if was_selecting_equipment:
+		_close_inventory_drawer()
+
+	_refresh_character_cards()
+	_refresh_character_detail_popup()
 
 
 func _on_hire_pressed(card_id: StringName) -> void:
