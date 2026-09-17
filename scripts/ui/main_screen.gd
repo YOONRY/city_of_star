@@ -14,7 +14,6 @@ var event_list: VBoxContainer
 var next_day_button: Button
 var character_panel: PanelContainer
 var character_card_list: VBoxContainer
-var inventory_panel: PanelContainer
 var inventory_drawer: PanelContainer
 var inventory_drawer_title: Label
 var inventory_close_button: Button
@@ -133,37 +132,11 @@ func _build_ui() -> void:
 	character_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_scroll.add_child(character_card_list)
 
-	inventory_panel = _make_panel()
-	inventory_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inventory_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_column.add_child(inventory_panel)
-
-	var inventory_box := VBoxContainer.new()
-	inventory_box.add_theme_constant_override("separation", 12)
-	inventory_panel.add_child(inventory_box)
-
-	inventory_box.add_child(_make_section_title("Inventory"))
-
-	var inventory_buttons := HBoxContainer.new()
-	inventory_buttons.add_theme_constant_override("separation", 10)
-	inventory_box.add_child(inventory_buttons)
-
-	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
-	personnel_button.pressed.connect(_on_personnel_pressed)
-	inventory_buttons.add_child(personnel_button)
-
-	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
-	equipment_button.pressed.connect(_on_equipment_pressed)
-	inventory_buttons.add_child(equipment_button)
-
-	consumable_button = _make_icon_button("res://assets/icons/potion_icon.svg", "Consumable Cards")
-	consumable_button.pressed.connect(_on_consumable_pressed)
-	inventory_buttons.add_child(consumable_button)
-
 	inventory_drawer = _make_panel(Color("#121B24"), Color("#38556A"))
+	inventory_drawer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_drawer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inventory_drawer.visible = false
-	inventory_box.add_child(inventory_drawer)
+	right_column.add_child(inventory_drawer)
 
 	var drawer_box := VBoxContainer.new()
 	drawer_box.add_theme_constant_override("separation", 10)
@@ -192,15 +165,32 @@ func _build_ui() -> void:
 	inventory_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_scroll.add_child(inventory_card_list)
 
+	var bottom_icon_row := HBoxContainer.new()
+	bottom_icon_row.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	bottom_icon_row.offset_left = -338
+	bottom_icon_row.offset_top = -104
+	bottom_icon_row.offset_right = -40
+	bottom_icon_row.offset_bottom = -40
+	bottom_icon_row.add_theme_constant_override("separation", 10)
+	bottom_icon_row.alignment = BoxContainer.ALIGNMENT_END
+	add_child(bottom_icon_row)
+
+	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
+	personnel_button.pressed.connect(_on_personnel_pressed)
+	bottom_icon_row.add_child(personnel_button)
+
+	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
+	equipment_button.pressed.connect(_on_equipment_pressed)
+	bottom_icon_row.add_child(equipment_button)
+
+	consumable_button = _make_icon_button("res://assets/icons/potion_icon.svg", "Consumable Cards")
+	consumable_button.pressed.connect(_on_consumable_pressed)
+	bottom_icon_row.add_child(consumable_button)
+
 	next_day_button = _make_icon_button("res://assets/icons/next_day_icon.svg", "Next Day")
 	next_day_button.custom_minimum_size = Vector2(64, 64)
-	next_day_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	next_day_button.offset_left = -104
-	next_day_button.offset_top = -104
-	next_day_button.offset_right = -40
-	next_day_button.offset_bottom = -40
 	next_day_button.pressed.connect(_on_next_day_pressed)
-	add_child(next_day_button)
+	bottom_icon_row.add_child(next_day_button)
 
 
 func _make_panel(background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
@@ -1430,6 +1420,7 @@ func _is_inventory_drawer_click(position: Vector2) -> bool:
 		or _is_point_in_control(personnel_button, position)
 		or _is_point_in_control(equipment_button, position)
 		or _is_point_in_control(consumable_button, position)
+		or _is_point_in_control(next_day_button, position)
 	)
 
 
