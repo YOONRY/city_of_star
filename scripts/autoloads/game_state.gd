@@ -10,6 +10,7 @@ const STARTING_MONEY := 100
 const STARTING_WEEKLY_TAX := 80
 const TAX_DUE_WEEKDAY := 7
 const STARTING_CARD_TAG := "starter"
+const MAX_EQUIPMENT_PER_CHARACTER := 3
 
 var current_day: int = 1
 var office := OfficeState.new()
@@ -19,6 +20,7 @@ var game_over_reason: String = ""
 var last_tax_payment_day: int = 0
 var last_tax_payment_week: int = 0
 var last_tax_payment_amount: int = 0
+var equipped_card_ids_by_character_id: Dictionary = {}
 
 func _ready() -> void:
 	reset_game()
@@ -32,6 +34,7 @@ func reset_game() -> void:
 	tax_manager = TaxManager.new(STARTING_WEEKLY_TAX, TAX_DUE_WEEKDAY)
 	is_game_over = false
 	game_over_reason = ""
+	equipped_card_ids_by_character_id.clear()
 	_clear_last_tax_payment()
 	state_changed.emit()
 
@@ -148,6 +151,105 @@ func get_hire_cost(card: CardDefinition) -> int:
 		return 0
 
 	return maxi(0, card.weekly_wage)
+
+
+func get_equipped_card_ids(character_id: StringName) -> Array[StringName]:
+	var equipped_ids: Array[StringName] = []
+	var raw_ids: Array = equipped_card_ids_by_character_id.get(character_id, [])
+
+	for equipment_id in raw_ids:
+		equipped_ids.append(equipment_id)
+
+	return equipped_ids
+
+
+func get_equipped_cards(character: CardDefinition) -> Array[CardDefinition]:
+	var equipped_cards: Array[CardDefinition] = []
+	if character == null or not character.is_character():
+		return equipped_cards
+
+	for equipment_id in get_equipped_card_ids(character.id):
+		var equipment := ContentCatalog.get_card(equipment_id)
+		if equipment != null and equipment.is_equipment():
+			equipped_cards.append(equipment)
+
+	return equipped_cards
+
+
+func get_equipment_owner_id(equipment_id: StringName) -> StringName:
+	for character_id in equipped_card_ids_by_character_id.keys():
+		var equipped_ids: Array = equipped_card_ids_by_character_id[character_id]
+		if equipped_ids.has(equipment_id):
+			return character_id
+
+	return &""
+
+
+func is_equipment_equipped(equipment: CardDefinition) -> bool:
+	return equipment != null and not String(get_equipment_owner_id(equipment.id)).is_empty()
+
+
+func can_equip_card(character: CardDefinition, equipment: CardDefinition) -> bool:
+	if is_game_over:
+		return false
+
+	if character == null or equipment == null:
+		return false
+
+	if not character.is_character() or not equipment.is_equipment():
+		return false
+
+	if not office.owned_cards.has(character) or not office.owned_cards.has(equipment):
+		return false
+
+	if is_equipment_equipped(equipment):
+		return false
+
+	return get_equipped_card_ids(character.id).size() < MAX_EQUIPMENT_PER_CHARACTER
+
+
+func equip_card(character: CardDefinition, equipment: CardDefinition) -> bool:
+	if not can_equip_card(character, equipment):
+		return false
+
+	var equipped_ids := get_equipped_card_ids(character.id)
+	equipped_ids.append(equipment.id)
+	equipped_card_ids_by_character_id[character.id] = equipped_ids
+	state_changed.emit()
+	return true
+
+
+func unequip_card(character: CardDefinition, equipment_id: StringName) -> bool:
+	if character == null or not character.is_character():
+		return false
+
+	var equipped_ids := get_equipped_card_ids(character.id)
+	if not equipped_ids.has(equipment_id):
+		return false
+
+	equipped_ids.erase(equipment_id)
+	if equipped_ids.is_empty():
+		equipped_card_ids_by_character_id.erase(character.id)
+	else:
+		equipped_card_ids_by_character_id[character.id] = equipped_ids
+
+	state_changed.emit()
+	return true
+
+
+func get_effective_stats(card: CardDefinition) -> StatBlock:
+	var stats := StatBlock.new()
+	if card == null or card.stats == null:
+		return stats
+
+	stats = card.stats.clone()
+	if not card.is_character():
+		return stats
+
+	for equipment in get_equipped_cards(card):
+		stats.add(equipment.stats)
+
+	return stats
 
 
 func get_week() -> int:

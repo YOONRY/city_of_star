@@ -25,6 +25,7 @@ var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = NO_ACTIVE_DRAWER
 var selected_event_id: StringName = &""
+var equipment_target_character_id: StringName = &""
 var is_selecting_tax_event_money: bool = false
 var tax_event_money_assigned: bool = false
 var expanded_character_card_ids: Dictionary = {}
@@ -282,6 +283,12 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 	stat_label.add_theme_color_override("font_color", Color("#D7DEE8"))
 	box.add_child(stat_label)
 
+	if card.is_equipment() and not String(equipment_target_character_id).is_empty():
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.tooltip_text = "Click to equip."
+		row.gui_input.connect(_on_equipment_card_gui_input.bind(card.id))
+		_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
+
 	return row
 
 
@@ -450,6 +457,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 		box.add_child(_make_character_detail(card))
 
 	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
+	_set_button_mouse_filter_recursive(box)
 	return row
 
 
@@ -486,6 +494,7 @@ func _make_profile_frame(card: CardDefinition) -> PanelContainer:
 func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	var detail := VBoxContainer.new()
 	detail.add_theme_constant_override("separation", 8)
+	var effective_stats := GameState.get_effective_stats(card)
 
 	var stats := GridContainer.new()
 	stats.columns = 2
@@ -493,15 +502,23 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	stats.add_theme_constant_override("v_separation", 6)
 	detail.add_child(stats)
 
-	_add_metric(stats, "STR").text = str(card.stats.strength)
-	_add_metric(stats, "AGI").text = str(card.stats.agility)
-	_add_metric(stats, "INT").text = str(card.stats.intelligence)
-	_add_metric(stats, "CHM").text = str(card.stats.charm)
-	_add_metric(stats, "HP").text = str(card.stats.health)
+	_add_metric(stats, "STR").text = str(effective_stats.strength)
+	_add_metric(stats, "AGI").text = str(effective_stats.agility)
+	_add_metric(stats, "INT").text = str(effective_stats.intelligence)
+	_add_metric(stats, "CHM").text = str(effective_stats.charm)
+	_add_metric(stats, "HP").text = str(effective_stats.health)
 
 	var wage_label := _make_label("Wage %s" % card.weekly_wage, 12)
 	wage_label.add_theme_color_override("font_color", Color("#D7DEE8"))
 	detail.add_child(wage_label)
+
+	if not GameState.get_equipped_cards(card).is_empty():
+		var base_label := _make_label("Base: %s" % _format_stats(card.stats), 12)
+		base_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+		base_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		detail.add_child(base_label)
+
+	detail.add_child(_make_equipment_slot_section(card))
 
 	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
 	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
@@ -514,6 +531,51 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	detail.add_child(tag_label)
 
 	return detail
+
+
+func _make_equipment_slot_section(card: CardDefinition) -> VBoxContainer:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 6)
+
+	var title := _make_label("Equipment Slots", 13)
+	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	section.add_child(title)
+
+	var slots := VBoxContainer.new()
+	slots.add_theme_constant_override("separation", 6)
+	section.add_child(slots)
+
+	var equipped_cards := GameState.get_equipped_cards(card)
+	for slot_index in range(GameState.MAX_EQUIPMENT_PER_CHARACTER):
+		var equipment: CardDefinition = null
+		if slot_index < equipped_cards.size():
+			equipment = equipped_cards[slot_index]
+
+		slots.add_child(_make_equipment_slot_button(card, equipment, slot_index))
+
+	return section
+
+
+func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefinition, slot_index: int) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(0, 42)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+
+	if equipment == null:
+		button.text = "Slot %s: Add equipment" % (slot_index + 1)
+		button.disabled = GameState.is_game_over
+		button.pressed.connect(_on_equipment_slot_pressed.bind(character.id))
+	else:
+		button.text = "Slot %s: %s  %s" % [
+			slot_index + 1,
+			equipment.label(),
+			_format_stats(equipment.stats),
+		]
+		button.tooltip_text = "Click to unequip."
+		button.pressed.connect(_on_unequip_pressed.bind(character.id, equipment.id))
+
+	return button
 
 
 func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
@@ -959,12 +1021,8 @@ func _refresh_inventory_drawer() -> void:
 		inventory_drawer_title.text = "Personnel Office"
 		_populate_hire_candidate_list()
 	elif active_drawer_type == GameEnums.CardType.EQUIPMENT:
-		inventory_drawer_title.text = "Equipment Cards"
-		_populate_card_list(
-			inventory_card_list,
-			_get_cards_by_type(GameEnums.CardType.EQUIPMENT),
-			"No equipment cards."
-		)
+		inventory_drawer_title.text = _equipment_drawer_title()
+		_populate_equipment_card_list()
 	elif active_drawer_type == GameEnums.CardType.CONSUMABLE:
 		inventory_drawer_title.text = "Consumable Cards"
 		_populate_consumable_card_list()
@@ -1011,6 +1069,22 @@ func _populate_hire_candidate_list() -> void:
 		inventory_card_list.add_child(_make_hire_candidate_row(card))
 
 
+func _populate_equipment_card_list() -> void:
+	_clear_children(inventory_card_list)
+	var equipment_cards := _get_cards_by_type(GameEnums.CardType.EQUIPMENT)
+
+	if not String(equipment_target_character_id).is_empty():
+		equipment_cards = _get_available_equipment_cards()
+
+	if equipment_cards.is_empty():
+		var empty_text := "No available equipment." if not String(equipment_target_character_id).is_empty() else "No equipment cards."
+		inventory_card_list.add_child(_make_empty_label(empty_text))
+		return
+
+	for card in equipment_cards:
+		inventory_card_list.add_child(_make_card_row(card))
+
+
 func _populate_consumable_card_list() -> void:
 	_clear_children(inventory_card_list)
 	inventory_card_list.add_child(_make_money_stack_card())
@@ -1024,6 +1098,14 @@ func _populate_consumable_card_list() -> void:
 		inventory_card_list.add_child(_make_card_row(card))
 
 
+func _equipment_drawer_title() -> String:
+	var character := ContentCatalog.get_card(equipment_target_character_id)
+	if character != null:
+		return "Choose Equipment for %s" % character.label()
+
+	return "Equipment Cards"
+
+
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 	var filtered: Array[CardDefinition] = []
 
@@ -1033,6 +1115,18 @@ func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
 
 	filtered.sort_custom(Callable(self, "_sort_cards_by_label"))
 	return filtered
+
+
+func _get_available_equipment_cards() -> Array[CardDefinition]:
+	var equipment_cards: Array[CardDefinition] = []
+	var character := ContentCatalog.get_card(equipment_target_character_id)
+
+	for card in _get_cards_by_type(GameEnums.CardType.EQUIPMENT):
+		if GameState.can_equip_card(character, card):
+			equipment_cards.append(card)
+
+	equipment_cards.sort_custom(Callable(self, "_sort_cards_by_label"))
+	return equipment_cards
 
 
 func _get_hire_candidates() -> Array[CardDefinition]:
@@ -1077,6 +1171,15 @@ func _set_mouse_filter_recursive(node: Node, mouse_filter: int) -> void:
 		_set_mouse_filter_recursive(child, mouse_filter)
 
 
+func _set_button_mouse_filter_recursive(node: Node) -> void:
+	if node is Button:
+		var button := node as Button
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	for child in node.get_children():
+		_set_button_mouse_filter_recursive(child)
+
+
 func _card_meta(card: CardDefinition) -> String:
 	var parts: PackedStringArray = []
 
@@ -1087,6 +1190,10 @@ func _card_meta(card: CardDefinition) -> String:
 			parts.append("Wage %s" % card.weekly_wage)
 	else:
 		parts.append(GameEnums.card_type_label(card.card_type))
+		if card.is_equipment():
+			var owner := ContentCatalog.get_card(GameState.get_equipment_owner_id(card.id))
+			if owner != null:
+				parts.append("Equipped by %s" % owner.label())
 
 	if not card.tags.is_empty():
 		parts.append(", ".join(card.tags))
@@ -1194,24 +1301,60 @@ func _toggle_event_detail(event_id: StringName) -> void:
 func _on_reset_pressed() -> void:
 	expanded_character_card_ids.clear()
 	selected_event_id = &""
+	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	tax_event_money_assigned = false
 	GameState.reset_game()
 
 
 func _on_personnel_pressed() -> void:
+	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
 
 
 func _on_equipment_pressed() -> void:
+	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
 
 func _on_consumable_pressed() -> void:
+	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+
+
+func _on_equipment_slot_pressed(character_id: StringName) -> void:
+	equipment_target_character_id = character_id
+	expanded_character_card_ids[character_id] = true
+	is_selecting_tax_event_money = false
+	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
+
+
+func _on_unequip_pressed(character_id: StringName, equipment_id: StringName) -> void:
+	var character := ContentCatalog.get_card(character_id)
+	if GameState.unequip_card(character, equipment_id):
+		equipment_target_character_id = &""
+		_refresh()
+
+
+func _on_equipment_card_gui_input(event: InputEvent, equipment_id: StringName) -> void:
+	if String(equipment_target_character_id).is_empty():
+		return
+
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
+			return
+
+		var character := ContentCatalog.get_card(equipment_target_character_id)
+		var equipment := ContentCatalog.get_card(equipment_id)
+		if GameState.equip_card(character, equipment):
+			expanded_character_card_ids[equipment_target_character_id] = true
+			equipment_target_character_id = &""
+			_close_inventory_drawer()
+			_refresh()
 
 
 func _on_tax_consumable_slot_pressed() -> void:
@@ -1277,6 +1420,7 @@ func _open_inventory_drawer(card_type: int) -> void:
 
 func _close_inventory_drawer() -> void:
 	active_drawer_type = NO_ACTIVE_DRAWER
+	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
