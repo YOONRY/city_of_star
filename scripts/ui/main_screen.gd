@@ -11,9 +11,8 @@ var card_count_value: Label
 var request_count_value: Label
 var status_label: Label
 var event_list: VBoxContainer
-var action_panel: PanelContainer
 var next_day_button: Button
-var reset_button: Button
+var character_panel: PanelContainer
 var character_card_list: VBoxContainer
 var inventory_panel: PanelContainer
 var inventory_drawer: PanelContainer
@@ -67,7 +66,7 @@ func _build_ui() -> void:
 	top_bar.add_child(calendar_panel)
 
 	var calendar_metrics := GridContainer.new()
-	calendar_metrics.columns = 6
+	calendar_metrics.columns = 12
 	calendar_metrics.add_theme_constant_override("h_separation", 12)
 	calendar_metrics.add_theme_constant_override("v_separation", 4)
 	calendar_panel.add_child(calendar_metrics)
@@ -75,15 +74,48 @@ func _build_ui() -> void:
 	day_value = _add_metric(calendar_metrics, "Day")
 	week_value = _add_metric(calendar_metrics, "Week")
 	weekday_value = _add_metric(calendar_metrics, "Weekday")
+	tax_value = _add_metric(calendar_metrics, "Tax")
+	card_count_value = _add_metric(calendar_metrics, "Cards")
+	request_count_value = _add_metric(calendar_metrics, "Events")
 
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 18)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(body)
 
-	var character_panel := _make_panel()
-	character_panel.custom_minimum_size = Vector2(320, 0)
-	body.add_child(character_panel)
+	var event_panel := _make_panel()
+	event_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(event_panel)
+
+	var event_box := VBoxContainer.new()
+	event_box.add_theme_constant_override("separation", 14)
+	event_panel.add_child(event_box)
+
+	event_box.add_child(_make_section_title("Events"))
+
+	status_label = _make_label("", 13)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_box.add_child(status_label)
+
+	var event_scroll := ScrollContainer.new()
+	event_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	event_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	event_box.add_child(event_scroll)
+
+	event_list = VBoxContainer.new()
+	event_list.add_theme_constant_override("separation", 10)
+	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_scroll.add_child(event_list)
+
+	var right_column := VBoxContainer.new()
+	right_column.custom_minimum_size = Vector2(340, 0)
+	right_column.add_theme_constant_override("separation", 14)
+	body.add_child(right_column)
+
+	character_panel = _make_panel()
+	character_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_column.add_child(character_panel)
 
 	var character_box := VBoxContainer.new()
 	character_box.add_theme_constant_override("separation", 12)
@@ -100,66 +132,6 @@ func _build_ui() -> void:
 	character_card_list.add_theme_constant_override("separation", 10)
 	character_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_scroll.add_child(character_card_list)
-
-	var event_panel := _make_panel()
-	event_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.add_child(event_panel)
-
-	var event_box := VBoxContainer.new()
-	event_box.add_theme_constant_override("separation", 14)
-	event_panel.add_child(event_box)
-
-	event_box.add_child(_make_section_title("Events"))
-
-	var event_scroll := ScrollContainer.new()
-	event_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	event_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	event_box.add_child(event_scroll)
-
-	event_list = VBoxContainer.new()
-	event_list.add_theme_constant_override("separation", 10)
-	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	event_scroll.add_child(event_list)
-
-	var right_column := VBoxContainer.new()
-	right_column.custom_minimum_size = Vector2(300, 0)
-	right_column.add_theme_constant_override("separation", 14)
-	body.add_child(right_column)
-
-	action_panel = _make_panel()
-	action_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_column.add_child(action_panel)
-
-	var action_box := VBoxContainer.new()
-	action_box.add_theme_constant_override("separation", 12)
-	action_panel.add_child(action_box)
-
-	action_box.add_child(_make_section_title("Actions"))
-
-	next_day_button = Button.new()
-	next_day_button.text = "Next Day"
-	next_day_button.pressed.connect(_on_next_day_pressed)
-	action_box.add_child(next_day_button)
-
-	reset_button = Button.new()
-	reset_button.text = "Reset"
-	reset_button.pressed.connect(_on_reset_pressed)
-	action_box.add_child(reset_button)
-
-	var office_metrics := GridContainer.new()
-	office_metrics.columns = 2
-	office_metrics.add_theme_constant_override("h_separation", 20)
-	office_metrics.add_theme_constant_override("v_separation", 8)
-	action_box.add_child(office_metrics)
-
-	tax_value = _add_metric(office_metrics, "Tax")
-	card_count_value = _add_metric(office_metrics, "Cards")
-	request_count_value = _add_metric(office_metrics, "Events")
-
-	status_label = _make_label("", 13)
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	action_box.add_child(status_label)
 
 	inventory_panel = _make_panel()
 	inventory_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -219,6 +191,16 @@ func _build_ui() -> void:
 	inventory_card_list.add_theme_constant_override("separation", 10)
 	inventory_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_scroll.add_child(inventory_card_list)
+
+	next_day_button = _make_icon_button("res://assets/icons/next_day_icon.svg", "Next Day")
+	next_day_button.custom_minimum_size = Vector2(64, 64)
+	next_day_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	next_day_button.offset_left = -104
+	next_day_button.offset_top = -104
+	next_day_button.offset_right = -40
+	next_day_button.offset_bottom = -40
+	next_day_button.pressed.connect(_on_next_day_pressed)
+	add_child(next_day_button)
 
 
 func _make_panel(background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
@@ -1010,11 +992,11 @@ func _refresh_event_list() -> void:
 
 func _refresh_inventory_drawer() -> void:
 	if active_drawer_type == NO_ACTIVE_DRAWER:
-		action_panel.visible = true
+		character_panel.visible = true
 		inventory_drawer.visible = false
 		return
 
-	action_panel.visible = false
+	character_panel.visible = false
 	inventory_drawer.visible = true
 
 	if active_drawer_type == GameEnums.CardType.CHARACTER:
