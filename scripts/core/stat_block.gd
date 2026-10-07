@@ -34,6 +34,17 @@ func plus(other: StatBlock) -> StatBlock:
 	return block.add(other)
 
 
+func floor_divided(divisor: int) -> StatBlock:
+	var safe_divisor := maxi(1, divisor)
+	var block := StatBlock.new()
+	block.strength = floori(float(strength) / float(safe_divisor))
+	block.agility = floori(float(agility) / float(safe_divisor))
+	block.intelligence = floori(float(intelligence) / float(safe_divisor))
+	block.charm = floori(float(charm) / float(safe_divisor))
+	block.health = floori(float(health) / float(safe_divisor))
+	return block
+
+
 func meets(required: StatBlock) -> bool:
 	if required == null:
 		return true

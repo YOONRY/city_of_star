@@ -11,6 +11,7 @@ const STARTING_WEEKLY_TAX := 80
 const TAX_DUE_WEEKDAY := 7
 const STARTING_CARD_TAG := "starter"
 const MAX_EQUIPMENT_PER_CHARACTER := 3
+const GROWTH_POINTS_PER_STAT := 100
 
 var current_day: int = 1
 var office := OfficeState.new()
@@ -21,6 +22,8 @@ var last_tax_payment_day: int = 0
 var last_tax_payment_week: int = 0
 var last_tax_payment_amount: int = 0
 var equipped_card_ids_by_character_id: Dictionary = {}
+var character_levels_by_id: Dictionary = {}
+var character_bonus_stats_by_id: Dictionary = {}
 
 func _ready() -> void:
 	reset_game()
@@ -35,6 +38,8 @@ func reset_game() -> void:
 	is_game_over = false
 	game_over_reason = ""
 	equipped_card_ids_by_character_id.clear()
+	character_levels_by_id.clear()
+	character_bonus_stats_by_id.clear()
 	_clear_last_tax_payment()
 	state_changed.emit()
 
@@ -153,6 +158,55 @@ func get_hire_cost(card: CardDefinition) -> int:
 	return maxi(0, card.weekly_wage)
 
 
+func get_character_level(character: CardDefinition) -> int:
+	if character == null or not character.is_character():
+		return 0
+
+	return int(character_levels_by_id.get(character.id, 1))
+
+
+func get_character_bonus_stats(character: CardDefinition) -> StatBlock:
+	var stats := StatBlock.new()
+	if character == null or not character.is_character():
+		return stats
+
+	var raw_stats := character_bonus_stats_by_id.get(character.id, null) as StatBlock
+	if raw_stats == null:
+		return stats
+
+	return raw_stats.clone()
+
+
+func get_character_growth(character: CardDefinition) -> StatBlock:
+	var growth := StatBlock.new()
+	if character == null or not character.is_character():
+		return growth
+
+	if character.growth != null:
+		growth.add(character.growth)
+
+	growth.add(ContentCatalog.get_job_growth(character.job))
+	return growth
+
+
+func get_character_level_up_gain(character: CardDefinition) -> StatBlock:
+	return get_character_growth(character).floor_divided(GROWTH_POINTS_PER_STAT)
+
+
+func level_up_character(character: CardDefinition) -> bool:
+	if is_game_over or character == null or not character.is_character():
+		return false
+
+	if not office.owned_cards.has(character):
+		return false
+
+	var bonus_stats := _get_mutable_character_bonus_stats(character.id)
+	bonus_stats.add(get_character_level_up_gain(character))
+	character_levels_by_id[character.id] = get_character_level(character) + 1
+	state_changed.emit()
+	return true
+
+
 func get_equipped_card_ids(character_id: StringName) -> Array[StringName]:
 	var equipped_ids: Array[StringName] = []
 	var raw_ids: Array = equipped_card_ids_by_character_id.get(character_id, [])
@@ -246,6 +300,8 @@ func get_effective_stats(card: CardDefinition) -> StatBlock:
 	if not card.is_character():
 		return stats
 
+	stats.add(get_character_bonus_stats(card))
+
 	for equipment in get_equipped_cards(card):
 		stats.add(equipment.stats)
 
@@ -276,6 +332,15 @@ func _clear_last_tax_payment() -> void:
 	last_tax_payment_day = 0
 	last_tax_payment_week = 0
 	last_tax_payment_amount = 0
+
+
+func _get_mutable_character_bonus_stats(character_id: StringName) -> StatBlock:
+	var stats := character_bonus_stats_by_id.get(character_id, null) as StatBlock
+	if stats == null:
+		stats = StatBlock.new()
+		character_bonus_stats_by_id[character_id] = stats
+
+	return stats
 
 
 func _set_game_over(reason: String) -> void:

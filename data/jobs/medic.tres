@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="JobDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_growth"]
+script = ExtResource("2_stats")
+strength = 20
+agility = 30
+intelligence = 60
+charm = 50
+health = 80
+
+[resource]
+script = ExtResource("1_job")
+id = &"Medic"
+display_name = "Medic"
+growth = SubResource("Resource_growth")

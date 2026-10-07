@@ -5,6 +5,7 @@ class_name CardDefinition
 @export var display_name: String = ""
 @export_enum("Character", "Equipment", "Consumable") var card_type: int = GameEnums.CardType.CHARACTER
 @export var stats: StatBlock = StatBlock.new()
+@export var growth: StatBlock = StatBlock.new()
 @export var skill_ids: PackedStringArray = []
 @export var weekly_wage: int = 0
 @export var job: StringName

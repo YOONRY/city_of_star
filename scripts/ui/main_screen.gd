@@ -522,16 +522,19 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	_add_metric(stats, "CHM").text = str(effective_stats.charm)
 	_add_metric(stats, "HP").text = str(effective_stats.health)
 
+	detail.add_child(_make_character_level_row(card))
+
 	var wage_label := _make_label("Wage %s" % card.weekly_wage, 12)
 	wage_label.add_theme_color_override("font_color", Color("#D7DEE8"))
 	detail.add_child(wage_label)
 
-	if not GameState.get_equipped_cards(card).is_empty():
+	if GameState.get_character_level(card) > 1 or not GameState.get_equipped_cards(card).is_empty():
 		var base_label := _make_label("Base: %s" % _format_stats(card.stats), 12)
 		base_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 		base_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		detail.add_child(base_label)
 
+	detail.add_child(_make_character_growth_section(card))
 	detail.add_child(_make_equipment_slot_section(card))
 
 	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
@@ -545,6 +548,66 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	detail.add_child(tag_label)
 
 	return detail
+
+
+func _make_character_level_row(card: CardDefinition) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+
+	var level_label := _make_label("Level %s" % GameState.get_character_level(card), 13)
+	level_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	level_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(level_label)
+
+	var gain_label := _make_label("Next %s" % _format_level_up_gain(GameState.get_character_level_up_gain(card)), 12)
+	gain_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	gain_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gain_label)
+
+	var level_up_button := Button.new()
+	level_up_button.text = "Level Up"
+	level_up_button.focus_mode = Control.FOCUS_NONE
+	level_up_button.disabled = GameState.is_game_over
+	level_up_button.pressed.connect(_on_level_up_pressed.bind(card.id))
+	row.add_child(level_up_button)
+	return row
+
+
+func _make_character_growth_section(card: CardDefinition) -> VBoxContainer:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 6)
+
+	var title := _make_label("Growth", 13)
+	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	section.add_child(title)
+
+	var character_growth := StatBlock.new()
+	if card.growth != null:
+		character_growth = card.growth.clone()
+
+	var job_growth := ContentCatalog.get_job_growth(card.job)
+	var total_growth := GameState.get_character_growth(card)
+	var level_gain := GameState.get_character_level_up_gain(card)
+
+	section.add_child(_make_growth_label("STR", character_growth.strength, job_growth.strength, total_growth.strength, level_gain.strength))
+	section.add_child(_make_growth_label("AGI", character_growth.agility, job_growth.agility, total_growth.agility, level_gain.agility))
+	section.add_child(_make_growth_label("INT", character_growth.intelligence, job_growth.intelligence, total_growth.intelligence, level_gain.intelligence))
+	section.add_child(_make_growth_label("CHM", character_growth.charm, job_growth.charm, total_growth.charm, level_gain.charm))
+	section.add_child(_make_growth_label("HP", character_growth.health, job_growth.health, total_growth.health, level_gain.health))
+	return section
+
+
+func _make_growth_label(stat_name: String, character_growth: int, job_growth: int, total_growth: int, level_gain: int) -> Label:
+	var label := _make_label("%s %s + %s = %s  (+%s)" % [
+		stat_name,
+		character_growth,
+		job_growth,
+		total_growth,
+		level_gain,
+	], 12)
+	label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return label
 
 
 func _make_equipment_slot_section(card: CardDefinition) -> VBoxContainer:
@@ -1303,6 +1366,28 @@ func _format_stats(stats: StatBlock) -> String:
 	]
 
 
+func _format_level_up_gain(stats: StatBlock) -> String:
+	if stats == null:
+		return "+0"
+
+	var parts: PackedStringArray = []
+	if stats.strength != 0:
+		parts.append("STR +%s" % stats.strength)
+	if stats.agility != 0:
+		parts.append("AGI +%s" % stats.agility)
+	if stats.intelligence != 0:
+		parts.append("INT +%s" % stats.intelligence)
+	if stats.charm != 0:
+		parts.append("CHM +%s" % stats.charm)
+	if stats.health != 0:
+		parts.append("HP +%s" % stats.health)
+
+	if parts.is_empty():
+		return "+0"
+
+	return ", ".join(parts)
+
+
 func _event_meta(request: RequestDefinition) -> String:
 	var parts: PackedStringArray = [
 		GameEnums.request_type_label(request.request_type),
@@ -1386,6 +1471,13 @@ func _on_equipment_slot_pressed(character_id: StringName) -> void:
 	selected_character_card_id = character_id
 	is_selecting_tax_event_money = false
 	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
+
+
+func _on_level_up_pressed(character_id: StringName) -> void:
+	var character := ContentCatalog.get_card(character_id)
+	if GameState.level_up_character(character):
+		selected_character_card_id = character_id
+		_refresh()
 
 
 func _on_unequip_pressed(character_id: StringName, equipment_id: StringName) -> void:

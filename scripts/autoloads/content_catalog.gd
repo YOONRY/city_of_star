@@ -4,11 +4,14 @@ class_name CityContentCatalog
 signal catalog_reloaded
 
 const CARD_DIRECTORY := "res://data/cards"
+const JOB_DIRECTORY := "res://data/jobs"
 const REQUEST_DIRECTORY := "res://data/requests"
 
 var cards: Array[CardDefinition] = []
+var jobs: Array[JobDefinition] = []
 var requests: Array[RequestDefinition] = []
 var cards_by_id: Dictionary = {}
+var jobs_by_id: Dictionary = {}
 var requests_by_id: Dictionary = {}
 
 func _ready() -> void:
@@ -16,6 +19,7 @@ func _ready() -> void:
 
 
 func reload() -> void:
+	_load_jobs()
 	_load_cards()
 	_load_requests()
 	catalog_reloaded.emit()
@@ -29,6 +33,18 @@ func get_request(id: StringName) -> RequestDefinition:
 	return requests_by_id.get(id, null) as RequestDefinition
 
 
+func get_job(id: StringName) -> JobDefinition:
+	return jobs_by_id.get(id, null) as JobDefinition
+
+
+func get_job_growth(id: StringName) -> StatBlock:
+	var job := get_job(id)
+	if job == null or job.growth == null:
+		return StatBlock.new()
+
+	return job.growth.clone()
+
+
 func _load_cards() -> void:
 	cards.clear()
 	cards_by_id.clear()
@@ -39,6 +55,18 @@ func _load_cards() -> void:
 			cards.append(card)
 			if not String(card.id).is_empty():
 				cards_by_id[card.id] = card
+
+
+func _load_jobs() -> void:
+	jobs.clear()
+	jobs_by_id.clear()
+
+	for resource in _load_resource_files(JOB_DIRECTORY):
+		if resource is JobDefinition:
+			var job := resource as JobDefinition
+			jobs.append(job)
+			if not String(job.id).is_empty():
+				jobs_by_id[job.id] = job
 
 
 func _load_requests() -> void:
