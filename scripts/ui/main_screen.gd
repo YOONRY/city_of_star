@@ -2,13 +2,15 @@ extends Control
 
 const NO_ACTIVE_DRAWER := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
+const PIXEL_PANEL_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space.png"
+const PIXEL_PANEL_INLAY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space_inlay.png"
+const PIXEL_BUTTON_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/blue.png"
+const PIXEL_BUTTON_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/blue_pressed.png"
+const PIXEL_BUTTON_ACCENT_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow.png"
+const PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow_pressed.png"
+const PIXEL_PANEL_GREY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/grey.png"
 
 var day_value: Label
-var week_value: Label
-var weekday_value: Label
-var tax_value: Label
-var card_count_value: Label
-var request_count_value: Label
 var status_label: Label
 var event_list: VBoxContainer
 var character_detail_popup: PanelContainer
@@ -65,20 +67,16 @@ func _build_ui() -> void:
 	top_bar.add_child(top_spacer)
 
 	var calendar_panel := _make_panel(Color("#14202A"), Color("#2F4659"))
+	calendar_panel.custom_minimum_size = Vector2(230, 0)
 	top_bar.add_child(calendar_panel)
 
-	var calendar_metrics := GridContainer.new()
-	calendar_metrics.columns = 12
-	calendar_metrics.add_theme_constant_override("h_separation", 12)
-	calendar_metrics.add_theme_constant_override("v_separation", 4)
-	calendar_panel.add_child(calendar_metrics)
-
-	day_value = _add_metric(calendar_metrics, "Day")
-	week_value = _add_metric(calendar_metrics, "Week")
-	weekday_value = _add_metric(calendar_metrics, "Weekday")
-	tax_value = _add_metric(calendar_metrics, "Tax")
-	card_count_value = _add_metric(calendar_metrics, "Cards")
-	request_count_value = _add_metric(calendar_metrics, "Events")
+	day_value = _make_label("", 30)
+	day_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	day_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	day_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	day_value.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	day_value.add_theme_color_override("font_color", Color("#F4C95D"))
+	calendar_panel.add_child(day_value)
 
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 18)
@@ -114,7 +112,7 @@ func _build_ui() -> void:
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
 
-	character_detail_popup = _make_panel(Color("#121B24"), Color("#F4C95D"))
+	character_detail_popup = _make_panel(Color("#121B24"), Color("#38556A"))
 	character_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
 	character_detail_popup.offset_left = 28
 	character_detail_popup.offset_top = 28
@@ -177,11 +175,52 @@ func _build_ui() -> void:
 	character_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_scroll.add_child(character_card_list)
 
-	inventory_drawer = _make_panel(Color("#121B24"), Color("#38556A"))
-	inventory_drawer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	inventory_drawer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var bottom_dock := MarginContainer.new()
+	bottom_dock.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	bottom_dock.offset_left = -372
+	bottom_dock.offset_top = -138
+	bottom_dock.offset_right = -32
+	bottom_dock.offset_bottom = -32
+	bottom_dock.add_theme_constant_override("margin_left", 18)
+	bottom_dock.add_theme_constant_override("margin_right", 18)
+	bottom_dock.add_theme_constant_override("margin_top", 18)
+	bottom_dock.add_theme_constant_override("margin_bottom", 18)
+	add_child(bottom_dock)
+
+	var bottom_icon_row := HBoxContainer.new()
+	bottom_icon_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_icon_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bottom_icon_row.add_theme_constant_override("separation", 10)
+	bottom_icon_row.alignment = BoxContainer.ALIGNMENT_END
+	bottom_dock.add_child(bottom_icon_row)
+
+	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
+	personnel_button.pressed.connect(_on_personnel_pressed)
+	bottom_icon_row.add_child(personnel_button)
+
+	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
+	equipment_button.pressed.connect(_on_equipment_pressed)
+	bottom_icon_row.add_child(equipment_button)
+
+	consumable_button = _make_icon_button("res://assets/icons/potion_icon.svg", "Consumable Cards")
+	consumable_button.pressed.connect(_on_consumable_pressed)
+	bottom_icon_row.add_child(consumable_button)
+
+	next_day_button = _make_icon_button("res://assets/icons/next_day_icon.svg", "Next Day")
+	next_day_button.custom_minimum_size = Vector2(64, 64)
+	next_day_button.pressed.connect(_on_next_day_pressed)
+	bottom_icon_row.add_child(next_day_button)
+
+	inventory_drawer = _make_panel(Color("#2D3036"), Color("#6F7378"))
+	inventory_drawer.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	inventory_drawer.offset_left = -430
+	inventory_drawer.offset_top = 112
+	inventory_drawer.offset_right = -32
+	inventory_drawer.offset_bottom = -32
+	inventory_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
+	inventory_drawer.z_index = 40
 	inventory_drawer.visible = false
-	right_column.add_child(inventory_drawer)
+	add_child(inventory_drawer)
 
 	var drawer_box := VBoxContainer.new()
 	drawer_box.add_theme_constant_override("separation", 10)
@@ -210,53 +249,42 @@ func _build_ui() -> void:
 	inventory_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_scroll.add_child(inventory_card_list)
 
-	var bottom_icon_row := HBoxContainer.new()
-	bottom_icon_row.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	bottom_icon_row.offset_left = -338
-	bottom_icon_row.offset_top = -104
-	bottom_icon_row.offset_right = -40
-	bottom_icon_row.offset_bottom = -40
-	bottom_icon_row.add_theme_constant_override("separation", 10)
-	bottom_icon_row.alignment = BoxContainer.ALIGNMENT_END
-	add_child(bottom_icon_row)
 
-	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
-	personnel_button.pressed.connect(_on_personnel_pressed)
-	bottom_icon_row.add_child(personnel_button)
-
-	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
-	equipment_button.pressed.connect(_on_equipment_pressed)
-	bottom_icon_row.add_child(equipment_button)
-
-	consumable_button = _make_icon_button("res://assets/icons/potion_icon.svg", "Consumable Cards")
-	consumable_button.pressed.connect(_on_consumable_pressed)
-	bottom_icon_row.add_child(consumable_button)
-
-	next_day_button = _make_icon_button("res://assets/icons/next_day_icon.svg", "Next Day")
-	next_day_button.custom_minimum_size = Vector2(64, 64)
-	next_day_button.pressed.connect(_on_next_day_pressed)
-	bottom_icon_row.add_child(next_day_button)
-
-
-func _make_panel(background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
+func _make_panel(_background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
 	var panel := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = background_color
-	style.border_color = border_color
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 18
-	style.content_margin_bottom = 18
+	var texture_path := PIXEL_PANEL_TEXTURE
+	if border_color == Color("#F4C95D"):
+		texture_path = PIXEL_BUTTON_ACCENT_TEXTURE
+	elif border_color == Color("#38556A"):
+		texture_path = PIXEL_PANEL_INLAY_TEXTURE
+	elif border_color == Color("#6F7378"):
+		texture_path = PIXEL_PANEL_GREY_TEXTURE
+	var style := _make_pixel_style(texture_path, 8, 18)
 	panel.add_theme_stylebox_override("panel", style)
 	return panel
+
+
+func _make_pixel_style(texture_path: String, texture_margin: int, content_margin: int) -> StyleBoxTexture:
+	var style := StyleBoxTexture.new()
+	style.texture = load(texture_path)
+	style.texture_margin_left = texture_margin
+	style.texture_margin_right = texture_margin
+	style.texture_margin_top = texture_margin
+	style.texture_margin_bottom = texture_margin
+	style.content_margin_left = content_margin
+	style.content_margin_right = content_margin
+	style.content_margin_top = content_margin
+	style.content_margin_bottom = content_margin
+	return style
+
+
+func _make_empty_style(content_margin: int = 0) -> StyleBoxEmpty:
+	var style := StyleBoxEmpty.new()
+	style.content_margin_left = content_margin
+	style.content_margin_right = content_margin
+	style.content_margin_top = content_margin
+	style.content_margin_bottom = content_margin
+	return style
 
 
 func _make_card_row(card: CardDefinition) -> PanelContainer:
@@ -264,22 +292,7 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 		return _make_character_card_row(card)
 
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#21303C")
-	style.border_color = Color("#3A5365")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	row.add_theme_stylebox_override("panel", style)
+	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var box := VBoxContainer.new()
@@ -315,22 +328,8 @@ func _make_money_stack_card() -> PanelContainer:
 	var is_current_week_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
 	var can_assign_money := is_tax_target and not is_current_week_paid and GameState.office.money >= tax_amount
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#24313A")
-	style.border_color = Color("#F4C95D") if can_assign_money else Color("#D6A64F")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	row.add_theme_stylebox_override("panel", style)
+	var texture_path := PIXEL_BUTTON_ACCENT_TEXTURE if can_assign_money else PIXEL_PANEL_INLAY_TEXTURE
+	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = "Click to place funds into the tax event." if can_assign_money else "Current office funds are shown as a stack."
@@ -419,22 +418,8 @@ func _make_money_stack_layer(offset: Vector2, background_color: Color, border_co
 func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
 	var is_selected := selected_character_card_id == card.id
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#21303C") if not is_selected else Color("#263B49")
-	style.border_color = Color("#3A5365") if not is_selected else Color("#F4C95D")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	row.add_theme_stylebox_override("panel", style)
+	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_TEXTURE
+	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
@@ -478,22 +463,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 func _make_profile_frame(card: CardDefinition) -> PanelContainer:
 	var frame := PanelContainer.new()
 	frame.custom_minimum_size = Vector2(56, 56)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#111A22")
-	style.border_color = Color("#60798C")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 5
-	style.corner_radius_top_right = 5
-	style.corner_radius_bottom_left = 5
-	style.corner_radius_bottom_right = 5
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	frame.add_theme_stylebox_override("panel", style)
+	frame.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 8))
 
 	var label := _make_label(_card_initials(card), 20)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -509,6 +479,11 @@ func _make_character_detail(card: CardDefinition) -> TabContainer:
 	var detail := TabContainer.new()
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	detail.add_theme_stylebox_override("tab_selected", _make_pixel_style(PIXEL_BUTTON_ACCENT_TEXTURE, 8, 8))
+	detail.add_theme_stylebox_override("tab_unselected", _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, 8))
+	detail.add_theme_color_override("font_selected_color", Color("#2B2617"))
+	detail.add_theme_color_override("font_unselected_color", Color("#F3F4F6"))
 	detail.add_child(_make_character_status_tab(card))
 	detail.add_child(_make_character_growth_tab(card))
 	detail.add_child(_make_character_skills_tab(card))
@@ -606,6 +581,7 @@ func _make_character_level_up_row(card: CardDefinition) -> HBoxContainer:
 	level_up_button.text = "Level Up"
 	level_up_button.focus_mode = Control.FOCUS_NONE
 	level_up_button.disabled = GameState.is_game_over
+	_style_pixel_button(level_up_button, true)
 	level_up_button.pressed.connect(_on_level_up_pressed.bind(card.id))
 	row.add_child(level_up_button)
 	return row
@@ -680,6 +656,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 	if equipment == null:
 		button.text = "Slot %s: Add equipment" % (slot_index + 1)
 		button.disabled = GameState.is_game_over
+		_style_pixel_button(button, true)
 		button.pressed.connect(_on_equipment_slot_pressed.bind(character.id))
 	else:
 		button.text = "Slot %s: %s  %s" % [
@@ -688,6 +665,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 			_format_stats(equipment.stats),
 		]
 		button.tooltip_text = "Click to unequip."
+		_style_pixel_button(button, false)
 		button.pressed.connect(_on_unequip_pressed.bind(character.id, equipment.id))
 
 	return button
@@ -695,22 +673,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 
 func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#202C35")
-	style.border_color = Color("#3A5365")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 10
-	style.content_margin_bottom = 10
-	row.add_theme_stylebox_override("panel", style)
+	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var box := VBoxContainer.new()
@@ -743,6 +706,7 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	var hire_button := Button.new()
 	hire_button.text = "Hire"
 	hire_button.disabled = not GameState.can_hire_card(card)
+	_style_pixel_button(hire_button, true)
 	hire_button.pressed.connect(_on_hire_pressed.bind(card.id))
 	header.add_child(hire_button)
 
@@ -763,22 +727,8 @@ func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	var event_id := _request_event_id(request)
 	var is_selected := selected_event_id == event_id
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#202C35") if not is_selected else Color("#243542")
-	style.border_color = Color("#3A5365") if not is_selected else Color("#F4C95D")
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	row.add_theme_stylebox_override("panel", style)
+	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_INLAY_TEXTURE
+	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 14))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
@@ -800,22 +750,10 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	var can_resolve := _can_resolve_tax_event()
 	var is_selected := selected_event_id == TAX_PAYMENT_EVENT_ID
 	var row := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#202C35") if not is_paid else Color("#20352C")
-	style.border_color = _tax_event_border_color(is_paid, can_resolve, is_selected)
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	row.add_theme_stylebox_override("panel", style)
+	var texture_path := PIXEL_PANEL_TEXTURE
+	if not is_paid and can_resolve:
+		texture_path = PIXEL_BUTTON_TEXTURE
+	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 14))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.gui_input.connect(_on_event_row_gui_input.bind(TAX_PAYMENT_EVENT_ID))
@@ -852,6 +790,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	resolve_button.disabled = not can_resolve
 	resolve_button.custom_minimum_size = Vector2(88, 34)
 	resolve_button.focus_mode = Control.FOCUS_NONE
+	_style_pixel_button(resolve_button, true)
 	resolve_button.pressed.connect(_on_tax_event_resolve_pressed)
 	header.add_child(resolve_button)
 
@@ -860,6 +799,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 		cancel_button.text = "취소"
 		cancel_button.custom_minimum_size = Vector2(72, 34)
 		cancel_button.focus_mode = Control.FOCUS_NONE
+		_style_pixel_button(cancel_button, false)
 		cancel_button.pressed.connect(_on_tax_event_cancel_pressed)
 		header.add_child(cancel_button)
 
@@ -915,6 +855,11 @@ func _make_event_title_button(title: String, event_id: StringName, is_selected: 
 	button.focus_mode = Control.FOCUS_NONE
 	button.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
 	button.add_theme_font_size_override("font_size", 15)
+	_style_clear_button(button)
+	if is_selected:
+		button.add_theme_color_override("font_color", Color("#F4C95D"))
+		button.add_theme_color_override("font_hover_color", Color("#F4C95D"))
+		button.add_theme_color_override("font_pressed_color", Color("#D6A64F"))
 	button.pressed.connect(_on_event_title_pressed.bind(event_id))
 	return button
 
@@ -926,6 +871,7 @@ func _make_event_slot_button(title: String, detail: String, disabled: bool, call
 	button.custom_minimum_size = Vector2(0, 72)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.focus_mode = Control.FOCUS_NONE
+	_style_pixel_button(button, not disabled)
 
 	if not disabled and callback.is_valid():
 		button.pressed.connect(callback)
@@ -1021,6 +967,7 @@ func _make_icon_button(icon_path: String, tooltip: String) -> Button:
 	button.custom_minimum_size = Vector2(58, 58)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.focus_mode = Control.FOCUS_NONE
+	_style_clear_button(button)
 	return button
 
 
@@ -1030,7 +977,36 @@ func _make_close_button() -> Button:
 	button.tooltip_text = "Close"
 	button.custom_minimum_size = Vector2(32, 32)
 	button.focus_mode = Control.FOCUS_NONE
+	_style_clear_button(button)
 	return button
+
+
+func _style_clear_button(button: Button) -> void:
+	button.flat = true
+	button.add_theme_stylebox_override("normal", _make_empty_style())
+	button.add_theme_stylebox_override("hover", _make_empty_style())
+	button.add_theme_stylebox_override("pressed", _make_empty_style())
+	button.add_theme_stylebox_override("disabled", _make_empty_style())
+	button.add_theme_stylebox_override("focus", _make_empty_style())
+	button.add_theme_color_override("font_color", Color("#F3F4F6"))
+	button.add_theme_color_override("font_hover_color", Color("#F4C95D"))
+	button.add_theme_color_override("font_pressed_color", Color("#D6A64F"))
+	button.add_theme_color_override("font_disabled_color", Color("#6F7F8D"))
+
+
+func _style_pixel_button(button: Button, accent: bool) -> void:
+	var normal_texture := PIXEL_BUTTON_ACCENT_TEXTURE if accent else PIXEL_BUTTON_TEXTURE
+	var pressed_texture := PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE if accent else PIXEL_BUTTON_PRESSED_TEXTURE
+	var font_color := Color("#2B2617") if accent else Color("#F3F4F6")
+	button.add_theme_stylebox_override("normal", _make_pixel_style(normal_texture, 8, 8))
+	button.add_theme_stylebox_override("hover", _make_pixel_style(pressed_texture, 8, 8))
+	button.add_theme_stylebox_override("pressed", _make_pixel_style(pressed_texture, 8, 8))
+	button.add_theme_stylebox_override("disabled", _make_empty_style(8))
+	button.add_theme_stylebox_override("focus", _make_empty_style())
+	button.add_theme_color_override("font_color", font_color)
+	button.add_theme_color_override("font_hover_color", font_color)
+	button.add_theme_color_override("font_pressed_color", font_color)
+	button.add_theme_color_override("font_disabled_color", Color("#6F7F8D"))
 
 
 func _make_label(text: String, font_size: int) -> Label:
@@ -1059,19 +1035,7 @@ func _add_metric(grid: GridContainer, name: String) -> Label:
 
 func _refresh() -> void:
 	_sync_tax_event_state()
-	day_value.text = str(GameState.current_day)
-	week_value.text = str(GameState.get_week())
-	weekday_value.text = "%s / 7" % GameState.get_weekday()
-	card_count_value.text = str(GameState.office.owned_cards.size())
-	request_count_value.text = str(ContentCatalog.requests.size() + 1)
-
-	var tax_text := str(GameState.tax_manager.weekly_tax)
-	if GameState.tax_manager.is_due(GameState.current_day):
-		if GameState.tax_manager.has_paid_current_week(GameState.current_day):
-			tax_text += " paid"
-		else:
-			tax_text += " due today"
-	tax_value.text = tax_text
+	day_value.text = "Day %s" % GameState.current_day
 
 	var tax_can_be_paid := (
 		GameState.tax_manager.is_due(GameState.current_day)
@@ -1166,12 +1130,12 @@ func _refresh_event_list() -> void:
 
 
 func _refresh_inventory_drawer() -> void:
+	character_panel.visible = true
+
 	if active_drawer_type == NO_ACTIVE_DRAWER:
-		character_panel.visible = true
 		inventory_drawer.visible = false
 		return
 
-	character_panel.visible = false
 	inventory_drawer.visible = true
 
 	if active_drawer_type == GameEnums.CardType.CHARACTER:
