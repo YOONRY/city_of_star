@@ -505,16 +505,42 @@ func _make_profile_frame(card: CardDefinition) -> PanelContainer:
 	return frame
 
 
-func _make_character_detail(card: CardDefinition) -> VBoxContainer:
-	var detail := VBoxContainer.new()
-	detail.add_theme_constant_override("separation", 8)
+func _make_character_detail(card: CardDefinition) -> TabContainer:
+	var detail := TabContainer.new()
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail.add_child(_make_character_status_tab(card))
+	detail.add_child(_make_character_growth_tab(card))
+	detail.add_child(_make_character_skills_tab(card))
+	detail.add_child(_make_character_equipment_tab(card))
+	return detail
+
+
+func _make_character_status_tab(card: CardDefinition) -> VBoxContainer:
+	var tab := VBoxContainer.new()
+	tab.name = "Status"
+	tab.add_theme_constant_override("separation", 10)
+
+	var info := GridContainer.new()
+	info.columns = 2
+	info.add_theme_constant_override("h_separation", 18)
+	info.add_theme_constant_override("v_separation", 6)
+	tab.add_child(info)
+
+	_add_metric(info, "Job").text = _character_job(card)
+	_add_metric(info, "Level").text = str(GameState.get_character_level(card))
+
+	var title := _make_label("Total Stats", 13)
+	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(title)
+
 	var effective_stats := GameState.get_effective_stats(card)
 
 	var stats := GridContainer.new()
 	stats.columns = 2
 	stats.add_theme_constant_override("h_separation", 18)
 	stats.add_theme_constant_override("v_separation", 6)
-	detail.add_child(stats)
+	tab.add_child(stats)
 
 	_add_metric(stats, "STR").text = str(effective_stats.strength)
 	_add_metric(stats, "AGI").text = str(effective_stats.agility)
@@ -522,42 +548,54 @@ func _make_character_detail(card: CardDefinition) -> VBoxContainer:
 	_add_metric(stats, "CHM").text = str(effective_stats.charm)
 	_add_metric(stats, "HP").text = str(effective_stats.health)
 
-	detail.add_child(_make_character_level_row(card))
+	return tab
 
-	var wage_label := _make_label("Wage %s" % card.weekly_wage, 12)
-	wage_label.add_theme_color_override("font_color", Color("#D7DEE8"))
-	detail.add_child(wage_label)
 
-	if GameState.get_character_level(card) > 1 or not GameState.get_equipped_cards(card).is_empty():
-		var base_label := _make_label("Base: %s" % _format_stats(card.stats), 12)
-		base_label.add_theme_color_override("font_color", Color("#AAB6C2"))
-		base_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		detail.add_child(base_label)
+func _make_character_growth_tab(card: CardDefinition) -> VBoxContainer:
+	var tab := VBoxContainer.new()
+	tab.name = "Growth"
+	tab.add_theme_constant_override("separation", 10)
+	tab.add_child(_make_character_growth_section(card))
+	tab.add_child(_make_character_level_up_row(card))
+	return tab
 
-	detail.add_child(_make_character_growth_section(card))
-	detail.add_child(_make_equipment_slot_section(card))
 
-	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
+func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
+	var tab := VBoxContainer.new()
+	tab.name = "Skills"
+	tab.add_theme_constant_override("separation", 8)
+
+	var skill_title := _make_label("Skills", 13)
+	skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(skill_title)
+
+	var skill_label := _make_label(_format_string_array(card.skill_ids, "None"), 12)
 	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.add_child(skill_label)
+	tab.add_child(skill_label)
 
-	var tag_label := _make_label("Tags: %s" % _format_string_array(card.tags, "None"), 12)
+	var tag_title := _make_label("Tags", 13)
+	tag_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(tag_title)
+
+	var tag_label := _make_label(_format_string_array(card.tags, "None"), 12)
 	tag_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.add_child(tag_label)
+	tab.add_child(tag_label)
+	return tab
 
-	return detail
+
+func _make_character_equipment_tab(card: CardDefinition) -> VBoxContainer:
+	var tab := VBoxContainer.new()
+	tab.name = "Equipment"
+	tab.add_theme_constant_override("separation", 10)
+	tab.add_child(_make_equipment_slot_section(card))
+	return tab
 
 
-func _make_character_level_row(card: CardDefinition) -> HBoxContainer:
+func _make_character_level_up_row(card: CardDefinition) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-
-	var level_label := _make_label("Level %s" % GameState.get_character_level(card), 13)
-	level_label.add_theme_color_override("font_color", Color("#D7DEE8"))
-	level_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(level_label)
 
 	var gain_label := _make_label("Next %s" % _format_level_up_gain(GameState.get_character_level_up_gain(card)), 12)
 	gain_label.add_theme_color_override("font_color", Color("#AAB6C2"))
