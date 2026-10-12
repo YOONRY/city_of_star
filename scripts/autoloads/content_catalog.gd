@@ -5,13 +5,17 @@ signal catalog_reloaded
 
 const CARD_DIRECTORY := "res://data/cards"
 const JOB_DIRECTORY := "res://data/jobs"
+const SPECIES_DIRECTORY := "res://data/species"
 const REQUEST_DIRECTORY := "res://data/requests"
+const SPECIES_SCRIPT := preload("res://scripts/core/species_definition.gd")
 
 var cards: Array[CardDefinition] = []
 var jobs: Array[JobDefinition] = []
+var species: Array[Resource] = []
 var requests: Array[RequestDefinition] = []
 var cards_by_id: Dictionary = {}
 var jobs_by_id: Dictionary = {}
+var species_by_id: Dictionary = {}
 var requests_by_id: Dictionary = {}
 
 func _ready() -> void:
@@ -20,6 +24,7 @@ func _ready() -> void:
 
 func reload() -> void:
 	_load_jobs()
+	_load_species()
 	_load_cards()
 	_load_requests()
 	catalog_reloaded.emit()
@@ -37,12 +42,24 @@ func get_job(id: StringName) -> JobDefinition:
 	return jobs_by_id.get(id, null) as JobDefinition
 
 
+func get_species(id: StringName):
+	return species_by_id.get(id, null)
+
+
 func get_job_growth(id: StringName) -> StatBlock:
 	var job := get_job(id)
 	if job == null or job.growth == null:
 		return StatBlock.new()
 
 	return job.growth.clone()
+
+
+func get_species_growth(id: StringName) -> StatBlock:
+	var definition = get_species(id)
+	if definition == null or definition.growth == null:
+		return StatBlock.new()
+
+	return definition.growth.clone()
 
 
 func _load_cards() -> void:
@@ -67,6 +84,17 @@ func _load_jobs() -> void:
 			jobs.append(job)
 			if not String(job.id).is_empty():
 				jobs_by_id[job.id] = job
+
+
+func _load_species() -> void:
+	species.clear()
+	species_by_id.clear()
+
+	for resource in _load_resource_files(SPECIES_DIRECTORY):
+		if resource != null and resource.get_script() == SPECIES_SCRIPT:
+			species.append(resource)
+			if not String(resource.id).is_empty():
+				species_by_id[resource.id] = resource
 
 
 func _load_requests() -> void:

@@ -112,7 +112,7 @@ func _build_ui() -> void:
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
 
-	character_detail_popup = _make_panel(Color("#121B24"), Color("#38556A"))
+	character_detail_popup = _make_panel(Color("#121B24"), Color("#2F4659"))
 	character_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
 	character_detail_popup.offset_left = 28
 	character_detail_popup.offset_top = 28
@@ -450,7 +450,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	summary_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	summary.add_child(summary_spacer)
 
-	var job_label := _make_label(_character_job(card), 12)
+	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 12)
 	job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary.add_child(job_label)
@@ -479,7 +479,7 @@ func _make_character_detail(card: CardDefinition) -> TabContainer:
 	var detail := TabContainer.new()
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	detail.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_TEXTURE, 8, 12))
 	detail.add_theme_stylebox_override("tab_selected", _make_pixel_style(PIXEL_BUTTON_ACCENT_TEXTURE, 8, 8))
 	detail.add_theme_stylebox_override("tab_unselected", _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, 8))
 	detail.add_theme_color_override("font_selected_color", Color("#2B2617"))
@@ -502,6 +502,7 @@ func _make_character_status_tab(card: CardDefinition) -> VBoxContainer:
 	info.add_theme_constant_override("v_separation", 6)
 	tab.add_child(info)
 
+	_add_metric(info, "Species").text = _character_species(card)
 	_add_metric(info, "Job").text = _character_job(card)
 	_add_metric(info, "Level").text = str(GameState.get_character_level(card))
 
@@ -548,6 +549,15 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(skill_label)
+
+	var species_skill_title := _make_label("Species Skills", 13)
+	species_skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(species_skill_title)
+
+	var species_skill_label := _make_label(_format_string_array(_species_skills(card), "None"), 12)
+	species_skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	species_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tab.add_child(species_skill_label)
 
 	var tag_title := _make_label("Tags", 13)
 	tag_title.add_theme_color_override("font_color", Color("#F4C95D"))
@@ -599,22 +609,24 @@ func _make_character_growth_section(card: CardDefinition) -> VBoxContainer:
 	if card.growth != null:
 		character_growth = card.growth.clone()
 
+	var species_growth := ContentCatalog.get_species_growth(card.species)
 	var job_growth := ContentCatalog.get_job_growth(card.job)
 	var total_growth := GameState.get_character_growth(card)
 	var level_gain := GameState.get_character_level_up_gain(card)
 
-	section.add_child(_make_growth_label("STR", character_growth.strength, job_growth.strength, total_growth.strength, level_gain.strength))
-	section.add_child(_make_growth_label("AGI", character_growth.agility, job_growth.agility, total_growth.agility, level_gain.agility))
-	section.add_child(_make_growth_label("INT", character_growth.intelligence, job_growth.intelligence, total_growth.intelligence, level_gain.intelligence))
-	section.add_child(_make_growth_label("CHM", character_growth.charm, job_growth.charm, total_growth.charm, level_gain.charm))
-	section.add_child(_make_growth_label("HP", character_growth.health, job_growth.health, total_growth.health, level_gain.health))
+	section.add_child(_make_growth_label("STR", character_growth.strength, species_growth.strength, job_growth.strength, total_growth.strength, level_gain.strength))
+	section.add_child(_make_growth_label("AGI", character_growth.agility, species_growth.agility, job_growth.agility, total_growth.agility, level_gain.agility))
+	section.add_child(_make_growth_label("INT", character_growth.intelligence, species_growth.intelligence, job_growth.intelligence, total_growth.intelligence, level_gain.intelligence))
+	section.add_child(_make_growth_label("CHM", character_growth.charm, species_growth.charm, job_growth.charm, total_growth.charm, level_gain.charm))
+	section.add_child(_make_growth_label("HP", character_growth.health, species_growth.health, job_growth.health, total_growth.health, level_gain.health))
 	return section
 
 
-func _make_growth_label(stat_name: String, character_growth: int, job_growth: int, total_growth: int, level_gain: int) -> Label:
-	var label := _make_label("%s %s + %s = %s  (+%s)" % [
+func _make_growth_label(stat_name: String, character_growth: int, species_growth: int, job_growth: int, total_growth: int, level_gain: int) -> Label:
+	var label := _make_label("%s Personal %s + Species %s + Job %s = %s  (+%s)" % [
 		stat_name,
 		character_growth,
+		species_growth,
 		job_growth,
 		total_growth,
 		level_gain,
@@ -695,7 +707,7 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	summary.add_child(name_label)
 
-	var job_label := _make_label(_character_job(card), 12)
+	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 12)
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary.add_child(job_label)
 
@@ -1116,7 +1128,7 @@ func _refresh_character_detail_popup() -> void:
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary_text.add_child(name_label)
 
-	var job_label := _make_label(_character_job(card), 14)
+	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 14)
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary_text.add_child(job_label)
 
@@ -1305,8 +1317,10 @@ func _card_meta(card: CardDefinition) -> String:
 	var parts: PackedStringArray = []
 
 	if card.is_character():
+		if not String(card.species).is_empty():
+			parts.append(_character_species(card))
 		if not String(card.job).is_empty():
-			parts.append(String(card.job))
+			parts.append(_character_job(card))
 		if card.weekly_wage > 0:
 			parts.append("Wage %s" % card.weekly_wage)
 	else:
@@ -1329,7 +1343,30 @@ func _character_job(card: CardDefinition) -> String:
 	if String(card.job).is_empty():
 		return "Unassigned"
 
-	return String(card.job)
+	var job := ContentCatalog.get_job(card.job)
+	if job == null:
+		return String(card.job)
+
+	return job.label()
+
+
+func _character_species(card: CardDefinition) -> String:
+	if String(card.species).is_empty():
+		return "Unassigned"
+
+	var species: Variant = ContentCatalog.get_species(card.species)
+	if species == null:
+		return String(card.species)
+
+	return species.label()
+
+
+func _species_skills(card: CardDefinition) -> PackedStringArray:
+	var species: Variant = ContentCatalog.get_species(card.species)
+	if species == null:
+		return PackedStringArray()
+
+	return species.skill_ids
 
 
 func _card_initials(card: CardDefinition) -> String:

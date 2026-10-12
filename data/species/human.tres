@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SpeciesDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/species_definition.gd" id="1_species"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_growth"]
+script = ExtResource("2_stats")
+strength = 100
+agility = 100
+intelligence = 100
+charm = 100
+health = 100
+
+[resource]
+script = ExtResource("1_species")
+id = &"human"
+display_name = "인간"
+description = "도시에서 가장 보편적인 종족입니다. 모든 성장치가 고르게 안정되어 있습니다."
+growth = SubResource("Resource_growth")
+skill_ids = PackedStringArray("적응력")

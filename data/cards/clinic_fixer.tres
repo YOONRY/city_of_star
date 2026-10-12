@@ -28,5 +28,6 @@ stats = SubResource("Resource_stats")
 growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("first_aid", "stabilize")
 weekly_wage = 24
+species = &"varga"
 job = &"Medic"
 tags = PackedStringArray("hireable", "character")

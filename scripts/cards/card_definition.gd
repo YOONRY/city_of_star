@@ -8,6 +8,7 @@ class_name CardDefinition
 @export var growth: StatBlock = StatBlock.new()
 @export var skill_ids: PackedStringArray = []
 @export var weekly_wage: int = 0
+@export var species: StringName
 @export var job: StringName
 @export var tags: PackedStringArray = []
 

@@ -185,6 +185,7 @@ func get_character_growth(character: CardDefinition) -> StatBlock:
 	if character.growth != null:
 		growth.add(character.growth)
 
+	growth.add(ContentCatalog.get_species_growth(character.species))
 	growth.add(ContentCatalog.get_job_growth(character.job))
 	return growth
 

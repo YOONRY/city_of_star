@@ -28,5 +28,6 @@ stats = SubResource("Resource_stats")
 growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("negotiate")
 weekly_wage = 18
+species = &"human"
 job = &"Mediator"
 tags = PackedStringArray("starter", "character")
