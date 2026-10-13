@@ -62,6 +62,18 @@ func get_species_growth(id: StringName) -> StatBlock:
 	return definition.growth.clone()
 
 
+func register_runtime_card(card: CardDefinition) -> void:
+	if card == null or String(card.id).is_empty():
+		return
+	cards_by_id[card.id] = card
+
+
+func unregister_runtime_card(card_id: StringName) -> void:
+	var card := get_card(card_id)
+	if card != null and not cards.has(card):
+		cards_by_id.erase(card_id)
+
+
 func _load_cards() -> void:
 	cards.clear()
 	cards_by_id.clear()

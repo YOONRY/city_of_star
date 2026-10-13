@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="JobDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/job_definition.gd" id="1_job"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_growth"]
+script = ExtResource("2_stats")
+strength = 10
+agility = 10
+intelligence = 90
+charm = 70
+health = 70
+
+[resource]
+script = ExtResource("1_job")
+id = &"Priest"
+display_name = "사제"
+growth = SubResource("Resource_growth")
+skill_ids = PackedStringArray("치유", "축복", "정화", "기적")
+skill_unlock_levels = PackedInt32Array(1, 3, 6, 10)

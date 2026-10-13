@@ -14,5 +14,9 @@ health = 30
 [resource]
 script = ExtResource("1_job")
 id = &"Runner"
-display_name = "Runner"
+display_name = "그림자 주자"
+tier = 2
 growth = SubResource("Resource_growth")
+skill_ids = PackedStringArray("질주", "신속 배달")
+skill_unlock_levels = PackedInt32Array(1, 6)
+prerequisite_job_ids = PackedStringArray("Spy")

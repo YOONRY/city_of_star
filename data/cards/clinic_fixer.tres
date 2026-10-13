@@ -6,18 +6,18 @@
 [sub_resource type="Resource" id="Resource_stats"]
 script = ExtResource("2_stats")
 strength = 1
-agility = 2
-intelligence = 4
-charm = 3
-health = 22
+agility = 1
+intelligence = 1
+charm = 1
+health = 2
 
 [sub_resource type="Resource" id="Resource_growth"]
 script = ExtResource("2_stats")
-strength = 70
-agility = 80
-intelligence = 130
-charm = 100
-health = 120
+strength = 10
+agility = 10
+intelligence = 40
+charm = 20
+health = 30
 
 [resource]
 script = ExtResource("1_card")
@@ -29,5 +29,5 @@ growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("first_aid", "stabilize")
 weekly_wage = 24
 species = &"varga"
-job = &"Medic"
+job = &"Priest"
 tags = PackedStringArray("hireable", "character")

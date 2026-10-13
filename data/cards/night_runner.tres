@@ -5,19 +5,19 @@
 
 [sub_resource type="Resource" id="Resource_stats"]
 script = ExtResource("2_stats")
-strength = 2
-agility = 5
-intelligence = 2
+strength = 1
+agility = 2
+intelligence = 1
 charm = 1
-health = 16
+health = 1
 
 [sub_resource type="Resource" id="Resource_growth"]
 script = ExtResource("2_stats")
-strength = 100
-agility = 140
-intelligence = 80
-charm = 70
-health = 90
+strength = 20
+agility = 40
+intelligence = 10
+charm = 10
+health = 30
 
 [resource]
 script = ExtResource("1_card")
@@ -29,5 +29,5 @@ growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("scout")
 weekly_wage = 16
 species = &"silvar"
-job = &"Runner"
+job = &"Spy"
 tags = PackedStringArray("starter", "character")

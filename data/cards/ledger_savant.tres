@@ -5,19 +5,19 @@
 
 [sub_resource type="Resource" id="Resource_stats"]
 script = ExtResource("2_stats")
-strength = 0
+strength = 1
 agility = 1
-intelligence = 6
+intelligence = 3
 charm = 2
-health = 15
+health = 1
 
 [sub_resource type="Resource" id="Resource_growth"]
 script = ExtResource("2_stats")
-strength = 50
-agility = 70
-intelligence = 150
-charm = 90
-health = 80
+strength = 10
+agility = 10
+intelligence = 50
+charm = 30
+health = 10
 
 [resource]
 script = ExtResource("1_card")
@@ -29,5 +29,5 @@ growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("audit", "forecast")
 weekly_wage = 22
 species = &"eidor"
-job = &"Analyst"
+job = &"Mage"
 tags = PackedStringArray("hireable", "character")

@@ -5,11 +5,11 @@
 
 [sub_resource type="Resource" id="Resource_growth"]
 script = ExtResource("2_stats")
-strength = 100
+strength = 80
 agility = 100
-intelligence = 100
-charm = 100
-health = 100
+intelligence = 150
+charm = 130
+health = 70
 
 [resource]
 script = ExtResource("1_species")

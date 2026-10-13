@@ -14,5 +14,9 @@ health = 40
 [resource]
 script = ExtResource("1_job")
 id = &"Mediator"
-display_name = "Mediator"
+display_name = "중재자"
+tier = 2
 growth = SubResource("Resource_growth")
+skill_ids = PackedStringArray("협상", "군중 제어")
+skill_unlock_levels = PackedInt32Array(1, 6)
+prerequisite_job_ids = PackedStringArray("Trickster")

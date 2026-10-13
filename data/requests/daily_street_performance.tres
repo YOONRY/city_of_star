@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="RequestDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/requests/request_definition.gd" id="1_request"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_required"]
+script = ExtResource("2_stats")
+charm = 2
+
+[resource]
+script = ExtResource("1_request")
+id = &"daily_street_performance"
+title = "거리 공연"
+request_type = 1
+duration_days = 1
+valid_days = 1
+required_stats = SubResource("Resource_required")
+reward_money = 15
+tags = PackedStringArray("daily_income", "매력")

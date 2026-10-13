@@ -2,6 +2,7 @@ extends Control
 
 const NO_ACTIVE_DRAWER := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
+const JOB_TRAINING_EVENT_ID := &"job_training"
 const PIXEL_PANEL_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space.png"
 const PIXEL_PANEL_INLAY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space_inlay.png"
 const PIXEL_BUTTON_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/blue.png"
@@ -9,6 +10,8 @@ const PIXEL_BUTTON_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slic
 const PIXEL_BUTTON_ACCENT_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow.png"
 const PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow_pressed.png"
 const PIXEL_PANEL_GREY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/grey.png"
+const WINDOW_BACKGROUND_COLOR := Color("#121B24")
+const WINDOW_BORDER_COLOR := Color("#2F4659")
 
 var day_value: Label
 var status_label: Label
@@ -16,6 +19,20 @@ var event_list: VBoxContainer
 var character_detail_popup: PanelContainer
 var character_detail_title: Label
 var character_detail_content: VBoxContainer
+var job_change_popup: PanelContainer
+var job_change_title: Label
+var job_change_content: VBoxContainer
+var settlement_popup: PanelContainer
+var settlement_content: VBoxContainer
+var player_creation_overlay: Control
+var player_name_input: LineEdit
+var player_species_option: OptionButton
+var player_job_option: OptionButton
+var player_growth_remaining_label: Label
+var player_growth_value_labels: Dictionary = {}
+var player_skill_checkboxes: Dictionary = {}
+var player_create_button: Button
+var player_creation_status_label: Label
 var next_day_button: Button
 var character_panel: PanelContainer
 var character_card_list: VBoxContainer
@@ -32,6 +49,19 @@ var selected_character_card_id: StringName = &""
 var equipment_target_character_id: StringName = &""
 var is_selecting_tax_event_money: bool = false
 var tax_event_money_assigned: bool = false
+var is_selecting_job_training_character: bool = false
+var job_training_candidate_character_id: StringName = &""
+var player_creation_growth := {
+	"strength": 10,
+	"agility": 10,
+	"intelligence": 10,
+	"charm": 10,
+	"health": 10,
+}
+var player_creation_skills := PackedStringArray()
+var daily_request_character_ids: Dictionary = {}
+var request_assignment_target_id: StringName = &""
+var settlement_results_dismissed: bool = false
 
 func _ready() -> void:
 	_build_ui()
@@ -112,7 +142,7 @@ func _build_ui() -> void:
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
 
-	character_detail_popup = _make_panel(Color("#121B24"), Color("#2F4659"))
+	character_detail_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
 	character_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
 	character_detail_popup.offset_left = 28
 	character_detail_popup.offset_top = 28
@@ -148,6 +178,81 @@ func _build_ui() -> void:
 	character_detail_content.add_theme_constant_override("separation", 12)
 	character_detail_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_detail_scroll.add_child(character_detail_content)
+
+	job_change_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
+	job_change_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	job_change_popup.offset_left = 42
+	job_change_popup.offset_top = 42
+	job_change_popup.offset_right = -42
+	job_change_popup.offset_bottom = -42
+	job_change_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	job_change_popup.visible = false
+	event_stage.add_child(job_change_popup)
+
+	var job_change_box := VBoxContainer.new()
+	job_change_box.add_theme_constant_override("separation", 12)
+	job_change_popup.add_child(job_change_box)
+
+	job_change_title = _make_label("전직할 직업을 선택하세요", 20)
+	job_change_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	job_change_box.add_child(job_change_title)
+
+	var job_change_help := _make_label("직업 교육을 마쳤습니다. 조건을 만족한 직업 중 하나를 선택해야 다음 날로 진행할 수 있습니다.", 12)
+	job_change_help.add_theme_color_override("font_color", Color("#AAB6C2"))
+	job_change_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	job_change_box.add_child(job_change_help)
+
+	var job_change_scroll := ScrollContainer.new()
+	job_change_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	job_change_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	job_change_box.add_child(job_change_scroll)
+
+	job_change_content = VBoxContainer.new()
+	job_change_content.add_theme_constant_override("separation", 8)
+	job_change_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	job_change_scroll.add_child(job_change_content)
+
+	settlement_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
+	settlement_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	settlement_popup.offset_left = 36
+	settlement_popup.offset_top = 36
+	settlement_popup.offset_right = -36
+	settlement_popup.offset_bottom = -36
+	settlement_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	settlement_popup.z_index = 30
+	settlement_popup.visible = false
+	event_stage.add_child(settlement_popup)
+
+	var settlement_box := VBoxContainer.new()
+	settlement_box.add_theme_constant_override("separation", 12)
+	settlement_popup.add_child(settlement_box)
+
+	var settlement_header := HBoxContainer.new()
+	settlement_header.add_theme_constant_override("separation", 10)
+	settlement_box.add_child(settlement_header)
+
+	var settlement_title := _make_label("일일 정산", 22)
+	settlement_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	settlement_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settlement_header.add_child(settlement_title)
+
+	var settlement_close_button := _make_close_button()
+	settlement_close_button.pressed.connect(_close_settlement_popup)
+	settlement_header.add_child(settlement_close_button)
+
+	var settlement_help := _make_label("전날 실행한 의뢰를 한꺼번에 판정했습니다.", 12)
+	settlement_help.add_theme_color_override("font_color", Color("#AAB6C2"))
+	settlement_box.add_child(settlement_help)
+
+	var settlement_scroll := ScrollContainer.new()
+	settlement_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	settlement_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	settlement_box.add_child(settlement_scroll)
+
+	settlement_content = VBoxContainer.new()
+	settlement_content.add_theme_constant_override("separation", 10)
+	settlement_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settlement_scroll.add_child(settlement_content)
 
 	var right_column := VBoxContainer.new()
 	right_column.custom_minimum_size = Vector2(340, 0)
@@ -248,6 +353,262 @@ func _build_ui() -> void:
 	inventory_card_list.add_theme_constant_override("separation", 10)
 	inventory_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_scroll.add_child(inventory_card_list)
+
+	_build_player_creation_overlay()
+
+
+func _build_player_creation_overlay() -> void:
+	player_creation_overlay = Control.new()
+	player_creation_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	player_creation_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	player_creation_overlay.z_index = 100
+	add_child(player_creation_overlay)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.03, 0.05, 0.08, 0.94)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	player_creation_overlay.add_child(backdrop)
+
+	var panel := _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
+	panel.anchor_left = 0.16
+	panel.anchor_top = 0.06
+	panel.anchor_right = 0.84
+	panel.anchor_bottom = 0.94
+	player_creation_overlay.add_child(panel)
+
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 12)
+	panel.add_child(outer)
+
+	var title := _make_label("플레이어 캐릭터 생성", 22)
+	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	outer.add_child(title)
+
+	var guide := _make_label("모든 개인 성장치는 10에서 시작합니다. 추가 성장치 80점을 분배하고 초기 개인 스킬 2개를 선택하세요.", 12)
+	guide.add_theme_color_override("font_color", Color("#AAB6C2"))
+	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	outer.add_child(guide)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(scroll)
+
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(content)
+
+	var identity_grid := GridContainer.new()
+	identity_grid.columns = 2
+	identity_grid.add_theme_constant_override("h_separation", 14)
+	identity_grid.add_theme_constant_override("v_separation", 8)
+	content.add_child(identity_grid)
+
+	identity_grid.add_child(_make_label("이름", 13))
+	player_name_input = LineEdit.new()
+	player_name_input.text = "별의 아이"
+	player_name_input.max_length = 20
+	player_name_input.text_changed.connect(_on_player_creation_changed)
+	identity_grid.add_child(player_name_input)
+
+	identity_grid.add_child(_make_label("종족", 13))
+	player_species_option = OptionButton.new()
+	player_species_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for species_definition in ContentCatalog.species:
+		var species_index := player_species_option.item_count
+		player_species_option.add_item(species_definition.label())
+		player_species_option.set_item_metadata(species_index, species_definition.id)
+	identity_grid.add_child(player_species_option)
+
+	identity_grid.add_child(_make_label("기본직업", 13))
+	player_job_option = OptionButton.new()
+	player_job_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for job in ContentCatalog.jobs:
+		if job == null or not job.is_basic_job():
+			continue
+		var job_index := player_job_option.item_count
+		player_job_option.add_item(job.label())
+		player_job_option.set_item_metadata(job_index, job.id)
+	identity_grid.add_child(player_job_option)
+
+	var growth_header := HBoxContainer.new()
+	content.add_child(growth_header)
+	var growth_title := _make_label("개인 성장치", 14)
+	growth_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	growth_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	growth_header.add_child(growth_title)
+	player_growth_remaining_label = _make_label("", 13)
+	growth_header.add_child(player_growth_remaining_label)
+
+	var growth_grid := GridContainer.new()
+	growth_grid.columns = 4
+	growth_grid.add_theme_constant_override("h_separation", 10)
+	growth_grid.add_theme_constant_override("v_separation", 6)
+	content.add_child(growth_grid)
+	_add_player_growth_row(growth_grid, "strength", "STR")
+	_add_player_growth_row(growth_grid, "agility", "AGI")
+	_add_player_growth_row(growth_grid, "intelligence", "INT")
+	_add_player_growth_row(growth_grid, "charm", "CHM")
+	_add_player_growth_row(growth_grid, "health", "HP")
+
+	var skill_title := _make_label("초기 개인 스킬 · 2개 선택", 14)
+	skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	content.add_child(skill_title)
+
+	var skill_grid := GridContainer.new()
+	skill_grid.columns = 2
+	skill_grid.add_theme_constant_override("h_separation", 18)
+	skill_grid.add_theme_constant_override("v_separation", 5)
+	content.add_child(skill_grid)
+	for skill_id in GameState.get_player_initial_skill_options():
+		var checkbox := CheckBox.new()
+		checkbox.text = skill_id
+		checkbox.toggled.connect(_on_player_skill_toggled.bind(skill_id))
+		player_skill_checkboxes[skill_id] = checkbox
+		skill_grid.add_child(checkbox)
+
+	player_creation_status_label = _make_label("", 12)
+	player_creation_status_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	content.add_child(player_creation_status_label)
+
+	player_create_button = Button.new()
+	player_create_button.text = "캐릭터 생성"
+	player_create_button.custom_minimum_size = Vector2(0, 42)
+	player_create_button.focus_mode = Control.FOCUS_NONE
+	_style_pixel_button(player_create_button, true)
+	player_create_button.pressed.connect(_on_player_create_pressed)
+	outer.add_child(player_create_button)
+	_refresh_player_creation_form()
+
+
+func _add_player_growth_row(grid: GridContainer, stat_key: String, stat_label: String) -> void:
+	grid.add_child(_make_label(stat_label, 13))
+	var decrease_button := Button.new()
+	decrease_button.text = "-10"
+	decrease_button.focus_mode = Control.FOCUS_NONE
+	_style_pixel_button(decrease_button, false)
+	decrease_button.pressed.connect(_on_player_growth_adjusted.bind(stat_key, -10))
+	grid.add_child(decrease_button)
+
+	var value_label := _make_label(str(player_creation_growth[stat_key]), 13)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	player_growth_value_labels[stat_key] = value_label
+	grid.add_child(value_label)
+
+	var increase_button := Button.new()
+	increase_button.text = "+10"
+	increase_button.focus_mode = Control.FOCUS_NONE
+	_style_pixel_button(increase_button, false)
+	increase_button.pressed.connect(_on_player_growth_adjusted.bind(stat_key, 10))
+	grid.add_child(increase_button)
+
+
+func _refresh_player_creation_form() -> void:
+	if player_creation_overlay == null:
+		return
+
+	player_creation_overlay.visible = not GameState.has_player_character()
+	var total_growth := 0
+	for value in player_creation_growth.values():
+		total_growth += int(value)
+	var remaining := GameState.PLAYER_GROWTH_BUDGET - total_growth
+	player_growth_remaining_label.text = "남은 점수: %s" % remaining
+	player_growth_remaining_label.add_theme_color_override("font_color", Color("#B7F6C7") if remaining == 0 else Color("#F4C95D"))
+
+	for stat_key in player_growth_value_labels:
+		var value_label := player_growth_value_labels[stat_key] as Label
+		value_label.text = str(player_creation_growth[stat_key])
+
+	var valid := (
+		not player_name_input.text.strip_edges().is_empty()
+		and player_species_option.item_count > 0
+		and player_job_option.item_count > 0
+		and remaining == 0
+		and player_creation_skills.size() == GameState.PLAYER_INITIAL_SKILL_COUNT
+	)
+	player_create_button.disabled = not valid
+	player_creation_status_label.text = "선택한 스킬: %s/%s" % [
+		player_creation_skills.size(),
+		GameState.PLAYER_INITIAL_SKILL_COUNT,
+	]
+
+
+func _reset_player_creation_form() -> void:
+	player_creation_growth = {
+		"strength": 10,
+		"agility": 10,
+		"intelligence": 10,
+		"charm": 10,
+		"health": 10,
+	}
+	player_creation_skills.clear()
+	if player_name_input != null:
+		player_name_input.text = "별의 아이"
+	if player_species_option != null and player_species_option.item_count > 0:
+		player_species_option.select(0)
+	if player_job_option != null and player_job_option.item_count > 0:
+		player_job_option.select(0)
+	for checkbox in player_skill_checkboxes.values():
+		(checkbox as CheckBox).set_pressed_no_signal(false)
+	_refresh_player_creation_form()
+
+
+func _on_player_creation_changed(_new_text: String) -> void:
+	_refresh_player_creation_form()
+
+
+func _on_player_growth_adjusted(stat_key: String, delta: int) -> void:
+	var current_value := int(player_creation_growth.get(stat_key, 0))
+	var next_value := current_value + delta
+	if next_value < GameState.PLAYER_GROWTH_MIN_PER_STAT or next_value > GameState.PLAYER_GROWTH_MAX_PER_STAT:
+		return
+
+	var total_growth := 0
+	for value in player_creation_growth.values():
+		total_growth += int(value)
+	if delta > 0 and total_growth + delta > GameState.PLAYER_GROWTH_BUDGET:
+		return
+
+	player_creation_growth[stat_key] = next_value
+	_refresh_player_creation_form()
+
+
+func _on_player_skill_toggled(pressed: bool, skill_id: String) -> void:
+	if pressed:
+		if player_creation_skills.size() >= GameState.PLAYER_INITIAL_SKILL_COUNT:
+			var checkbox := player_skill_checkboxes.get(skill_id, null) as CheckBox
+			if checkbox != null:
+				checkbox.set_pressed_no_signal(false)
+			return
+		player_creation_skills.append(skill_id)
+	else:
+		player_creation_skills.erase(skill_id)
+	_refresh_player_creation_form()
+
+
+func _on_player_create_pressed() -> void:
+	if player_species_option.item_count <= 0 or player_job_option.item_count <= 0:
+		return
+
+	var growth := StatBlock.new()
+	growth.strength = int(player_creation_growth["strength"])
+	growth.agility = int(player_creation_growth["agility"])
+	growth.intelligence = int(player_creation_growth["intelligence"])
+	growth.charm = int(player_creation_growth["charm"])
+	growth.health = int(player_creation_growth["health"])
+	var species_id := StringName(player_species_option.get_item_metadata(player_species_option.selected))
+	var job_id := StringName(player_job_option.get_item_metadata(player_job_option.selected))
+	var player := GameState.create_player_character(
+		player_name_input.text,
+		species_id,
+		job_id,
+		growth,
+		player_creation_skills
+	)
+	if player == null:
+		player_creation_status_label.text = "캐릭터 생성 조건을 다시 확인하세요."
 
 
 func _make_panel(_background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
@@ -418,12 +779,20 @@ func _make_money_stack_layer(offset: Vector2, background_color: Color, border_co
 func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
 	var is_selected := selected_character_card_id == card.id
+	var assigned_event := _character_event_assignment_label(card)
+	var is_event_selection := not String(request_assignment_target_id).is_empty() or is_selecting_job_training_character
+	var is_unavailable_for_event := is_event_selection and not assigned_event.is_empty()
 	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_TEXTURE
 	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
-	row.gui_input.connect(_on_character_card_gui_input.bind(card.id))
+	if not assigned_event.is_empty():
+		row.modulate = Color(0.58, 0.62, 0.68, 1.0)
+		row.tooltip_text = "%s에 배치 중" % assigned_event
+	else:
+		row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
+	if not is_unavailable_for_event:
+		row.gui_input.connect(_on_character_card_gui_input.bind(card.id))
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -454,6 +823,12 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary.add_child(job_label)
+
+	if not assigned_event.is_empty():
+		var assignment_label := _make_label("배치 중 · %s" % assigned_event, 12)
+		assignment_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		assignment_label.add_theme_color_override("font_color", Color("#8FCBFF"))
+		summary.add_child(assignment_label)
 
 	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 	_set_button_mouse_filter_recursive(box)
@@ -487,6 +862,7 @@ func _make_character_detail(card: CardDefinition) -> TabContainer:
 	detail.add_child(_make_character_status_tab(card))
 	detail.add_child(_make_character_growth_tab(card))
 	detail.add_child(_make_character_skills_tab(card))
+	detail.add_child(_make_character_job_history_tab(card))
 	detail.add_child(_make_character_equipment_tab(card))
 	return detail
 
@@ -504,6 +880,7 @@ func _make_character_status_tab(card: CardDefinition) -> VBoxContainer:
 
 	_add_metric(info, "Species").text = _character_species(card)
 	_add_metric(info, "Job").text = _character_job(card)
+	_add_metric(info, "Job Level").text = "%s / %s" % [GameState.get_character_job_level(card, GameState.get_character_current_job_id(card)), GameState.MAX_JOB_LEVEL]
 	_add_metric(info, "Level").text = str(GameState.get_character_level(card))
 
 	var title := _make_label("Total Stats", 13)
@@ -559,6 +936,15 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	species_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(species_skill_label)
 
+	var job_skill_title := _make_label("Learned Job Skills", 13)
+	job_skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(job_skill_title)
+
+	var job_skill_label := _make_label(_format_string_array(GameState.get_character_job_skill_ids(card), "None"), 12)
+	job_skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	job_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tab.add_child(job_skill_label)
+
 	var tag_title := _make_label("Tags", 13)
 	tag_title.add_theme_color_override("font_color", Color("#F4C95D"))
 	tab.add_child(tag_title)
@@ -568,6 +954,89 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(tag_label)
 	return tab
+
+
+func _make_character_job_history_tab(card: CardDefinition) -> VBoxContainer:
+	var tab := VBoxContainer.new()
+	tab.name = "Job History"
+	tab.add_theme_constant_override("separation", 10)
+
+	var current_job_id := GameState.get_character_current_job_id(card)
+	var current_level := GameState.get_character_job_level(card, current_job_id)
+	var current_title := _make_label("Current: %s  Lv.%s/%s" % [_job_label(current_job_id), current_level, GameState.MAX_JOB_LEVEL], 13)
+	current_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(current_title)
+
+	var train_button := Button.new()
+	train_button.text = "Job Mastered" if current_level >= GameState.MAX_JOB_LEVEL else "Train Current Job"
+	train_button.focus_mode = Control.FOCUS_NONE
+	train_button.disabled = not GameState.can_level_up_current_job(card)
+	_style_pixel_button(train_button, true)
+	train_button.pressed.connect(_on_job_level_up_pressed.bind(card.id))
+	tab.add_child(train_button)
+
+	var history_title := _make_label("Previous / Acquired Jobs", 13)
+	history_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(history_title)
+
+	var levels := GameState.get_character_job_levels(card)
+	for job_id in GameState.get_character_job_history_ids(card):
+		var job := ContentCatalog.get_job(job_id)
+		if job == null:
+			continue
+		var level := int(levels.get(job.id, 0))
+		if level <= 0:
+			continue
+		tab.add_child(_make_job_history_row(card, job, level, job.id == current_job_id))
+
+	var available_title := _make_label("Available Jobs", 13)
+	available_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	tab.add_child(available_title)
+
+	for job in ContentCatalog.jobs:
+		if levels.has(job.id):
+			continue
+		tab.add_child(_make_job_candidate_row(card, job))
+
+	return tab
+
+
+func _make_job_history_row(card: CardDefinition, job: JobDefinition, level: int, is_current: bool) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var mastered_text := "  MASTER" if level >= GameState.MAX_JOB_LEVEL else ""
+	var label := _make_label("%s  Lv.%s%s" % [job.label(), level, mastered_text], 12)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	row.add_child(label)
+
+	var button := Button.new()
+	button.text = "Current" if is_current else "교육소"
+	button.focus_mode = Control.FOCUS_NONE
+	button.disabled = true
+	_style_pixel_button(button, false)
+	row.add_child(button)
+	return row
+
+
+func _make_job_candidate_row(card: CardDefinition, job: JobDefinition) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var can_change := GameState.can_change_character_job(card, job.id)
+	var description := job.label()
+	if not job.is_basic_job():
+		description += "  (%s)" % job.requirement_text()
+
+	var label := _make_label(description, 12)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", Color("#AAB6C2") if can_change else Color("#697682"))
+	row.add_child(label)
+
+	var button := Button.new()
+	button.text = "교육소"
+	button.focus_mode = Control.FOCUS_NONE
+	button.disabled = true
+	_style_pixel_button(button, can_change)
+	row.add_child(button)
+	return row
 
 
 func _make_character_equipment_tab(card: CardDefinition) -> VBoxContainer:
@@ -610,7 +1079,12 @@ func _make_character_growth_section(card: CardDefinition) -> VBoxContainer:
 		character_growth = card.growth.clone()
 
 	var species_growth := ContentCatalog.get_species_growth(card.species)
-	var job_growth := ContentCatalog.get_job_growth(card.job)
+	var job_growth := StatBlock.new()
+	var current_job_id := GameState.get_character_current_job_id(card)
+	job_growth.add(ContentCatalog.get_job_growth(current_job_id))
+	for mastered_job_id in GameState.get_character_mastered_job_ids(card):
+		if mastered_job_id != current_job_id:
+			job_growth.add(ContentCatalog.get_job_growth(mastered_job_id))
 	var total_growth := GameState.get_character_growth(card)
 	var level_gain := GameState.get_character_level_up_gain(card)
 
@@ -738,9 +1212,9 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	var event_id := _request_event_id(request)
 	var is_selected := selected_event_id == event_id
+	var is_assignment_complete := GameState.get_daily_request_assigned_character(request) != null
 	var row := PanelContainer.new()
-	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_INLAY_TEXTURE
-	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 14))
+	row.add_theme_stylebox_override("panel", _event_assignment_style(is_assignment_complete, 14))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
@@ -749,7 +1223,7 @@ func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
 
-	box.add_child(_make_event_title_button(request.label(), event_id, is_selected))
+	box.add_child(_make_event_title_button(_request_display_title(request), event_id, is_selected))
 
 	if is_selected:
 		box.add_child(_make_request_event_detail(request))
@@ -762,10 +1236,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	var can_resolve := _can_resolve_tax_event()
 	var is_selected := selected_event_id == TAX_PAYMENT_EVENT_ID
 	var row := PanelContainer.new()
-	var texture_path := PIXEL_PANEL_TEXTURE
-	if not is_paid and can_resolve:
-		texture_path = PIXEL_BUTTON_TEXTURE
-	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 14))
+	row.add_theme_stylebox_override("panel", _event_assignment_style(is_paid, 14))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.gui_input.connect(_on_event_row_gui_input.bind(TAX_PAYMENT_EVENT_ID))
@@ -820,7 +1291,13 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	box.add_child(slot_row)
 
 	slot_row.add_child(_make_event_slot_button("인물", "필요 없음", true, Callable()))
-	slot_row.add_child(_make_event_slot_button("소비", _tax_consumable_slot_text(), is_paid, Callable(self, "_on_tax_consumable_slot_pressed")))
+	slot_row.add_child(_make_assignment_slot_button(
+		"소비",
+		_tax_consumable_slot_text(),
+		tax_event_money_assigned,
+		is_paid,
+		Callable(self, "_on_tax_consumable_slot_pressed")
+	))
 
 	var status_label := _make_label(_tax_event_status_text(), 12)
 	status_label.add_theme_color_override("font_color", _tax_event_status_color(is_paid, can_resolve))
@@ -830,14 +1307,116 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	return row
 
 
+func _make_job_training_event_row() -> PanelContainer:
+	var is_selected := selected_event_id == JOB_TRAINING_EVENT_ID
+	var assigned_character := GameState.get_job_training_character()
+	var candidate_character := ContentCatalog.get_card(job_training_candidate_character_id)
+	var has_pending_change := GameState.has_pending_job_change()
+	var is_assignment_complete := assigned_character != null or has_pending_change
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _event_assignment_style(is_assignment_complete, 14))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.gui_input.connect(_on_event_row_gui_input.bind(JOB_TRAINING_EVENT_ID))
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
+	box.add_child(_make_event_title_button("직업 교육소", JOB_TRAINING_EVENT_ID, is_selected))
+
+	if not is_selected:
+		return row
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	box.add_child(header)
+
+	var meta_label := _make_label("Event / 1 day / 캐릭터 카드 1장 필요", 12)
+	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	header.add_child(meta_label)
+
+	var execute_button := Button.new()
+	execute_button.text = "완료" if assigned_character != null else "실행"
+	execute_button.custom_minimum_size = Vector2(88, 34)
+	execute_button.focus_mode = Control.FOCUS_NONE
+	execute_button.disabled = candidate_character == null or assigned_character != null or has_pending_change
+	_style_pixel_button(execute_button, true)
+	execute_button.pressed.connect(_on_job_training_execute_pressed)
+	header.add_child(execute_button)
+
+	var slot_text := "미배치"
+	if candidate_character != null:
+		slot_text = "%s (대기)" % candidate_character.label()
+	elif assigned_character != null:
+		slot_text = assigned_character.label()
+	elif has_pending_change:
+		slot_text = "교육 완료"
+
+	var slot_row := HBoxContainer.new()
+	slot_row.add_theme_constant_override("separation", 10)
+	box.add_child(slot_row)
+	slot_row.add_child(_make_assignment_slot_button(
+		"인물",
+		slot_text,
+		candidate_character != null,
+		is_assignment_complete,
+		Callable(self, "_on_job_training_character_slot_pressed")
+	))
+	slot_row.add_child(_make_event_slot_button("소비", "필요 없음", true, Callable()))
+
+	if candidate_character != null or assigned_character != null:
+		var cancel_button := Button.new()
+		cancel_button.text = "배치 취소"
+		cancel_button.focus_mode = Control.FOCUS_NONE
+		_style_pixel_button(cancel_button, false)
+		cancel_button.pressed.connect(_on_job_training_cancel_pressed)
+		box.add_child(cancel_button)
+
+	var status_text := "인물 슬롯을 눌러 교육할 캐릭터를 배치하세요."
+	if candidate_character != null:
+		status_text = "%s 임시 배치. 실행 버튼을 눌러 배치를 확정하세요." % candidate_character.label()
+	elif assigned_character != null:
+		status_text = "%s 배치 완료. 하루를 넘기면 전직 선택창이 열립니다." % assigned_character.label()
+	elif has_pending_change:
+		status_text = "교육이 완료되었습니다. 전직할 직업을 선택하세요."
+	elif is_selecting_job_training_character:
+		status_text = "캐릭터 목록에서 교육할 인물을 선택하세요."
+
+	var status := _make_label(status_text, 12)
+	status.add_theme_color_override("font_color", Color("#F4C95D") if candidate_character != null or assigned_character != null or has_pending_change else Color("#AAB6C2"))
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(status)
+	return row
+
+
 func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	var detail := VBoxContainer.new()
 	detail.add_theme_constant_override("separation", 8)
+	var character_id := StringName(daily_request_character_ids.get(request.id, &""))
+	var candidate_character := ContentCatalog.get_card(character_id)
+	var queued_character := GameState.get_daily_request_assigned_character(request)
+	var is_queued := queued_character != null
+	var assigned_character := queued_character if is_queued else candidate_character
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	detail.add_child(header)
 
 	var meta_label := _make_label(_event_meta(request), 12)
+	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.add_child(meta_label)
+	header.add_child(meta_label)
+
+	var execute_button := Button.new()
+	execute_button.text = "배치 완료" if is_queued else "실행"
+	execute_button.custom_minimum_size = Vector2(88, 34)
+	execute_button.focus_mode = Control.FOCUS_NONE
+	execute_button.disabled = is_queued or not GameState.can_queue_daily_request(request, assigned_character)
+	_style_pixel_button(execute_button, true)
+	execute_button.pressed.connect(_on_daily_request_execute_pressed.bind(request.id))
+	header.add_child(execute_button)
 
 	var reward_label := _make_label(_event_rewards(request), 12)
 	reward_label.add_theme_color_override("font_color", Color("#D7DEE8"))
@@ -847,10 +1426,29 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	slot_row.add_theme_constant_override("separation", 10)
 	detail.add_child(slot_row)
 
-	slot_row.add_child(_make_event_slot_button("인물", "미배치", true, Callable()))
-	slot_row.add_child(_make_event_slot_button("소비", "미배치", true, Callable()))
+	var character_text := assigned_character.label() if assigned_character != null else "미배치"
+	slot_row.add_child(_make_assignment_slot_button(
+		"인물",
+		character_text,
+		candidate_character != null,
+		is_queued,
+		Callable(self, "_on_daily_request_character_slot_pressed").bind(request.id)
+	))
+	slot_row.add_child(_make_event_slot_button("소비", "필요 없음", true, Callable()))
+	if assigned_character != null:
+		var cancel_button := Button.new()
+		cancel_button.text = "배치 해제"
+		cancel_button.focus_mode = Control.FOCUS_NONE
+		_style_pixel_button(cancel_button, false)
+		cancel_button.pressed.connect(_on_daily_request_cancel_pressed.bind(request.id))
+		detail.add_child(cancel_button)
 
-	var status_label := _make_label("아직 일반 의뢰의 카드 배치 처리는 연결되지 않았습니다.", 12)
+	var status_text := "인물을 배치하고 실행하세요. 판정은 다음 날 정산창에서 한꺼번에 진행됩니다."
+	if is_queued:
+		status_text = "%s 배치 확정. 다음 날 정산을 기다리고 있습니다." % assigned_character.label()
+	elif assigned_character != null:
+		status_text = "%s 임시 배치. 실행하면 오늘의 의뢰로 확정됩니다." % assigned_character.label()
+	var status_label := _make_label(status_text, 12)
 	status_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.add_child(status_label)
@@ -889,6 +1487,72 @@ func _make_event_slot_button(title: String, detail: String, disabled: bool, call
 		button.pressed.connect(callback)
 
 	return button
+
+
+func _make_assignment_slot_button(title: String, detail: String, has_candidate: bool, is_queued: bool, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = "%s\n%s" % [title, detail]
+	button.disabled = is_queued
+	button.custom_minimum_size = Vector2(0, 72)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+
+	if is_queued:
+		_style_confirmed_request_slot(button)
+	elif has_candidate:
+		_style_pixel_button(button, false)
+		button.add_theme_color_override("font_color", Color("#E9F6FF"))
+		button.add_theme_color_override("font_hover_color", Color.WHITE)
+	else:
+		_style_empty_request_slot(button)
+
+	if not is_queued and callback.is_valid():
+		button.pressed.connect(callback)
+	return button
+
+
+func _style_empty_request_slot(button: Button) -> void:
+	button.add_theme_stylebox_override("normal", _make_pixel_style(PIXEL_PANEL_GREY_TEXTURE, 8, 8))
+	button.add_theme_stylebox_override("hover", _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, 8))
+	button.add_theme_stylebox_override("pressed", _make_pixel_style(PIXEL_BUTTON_PRESSED_TEXTURE, 8, 8))
+	button.add_theme_stylebox_override("disabled", _make_empty_style(8))
+	button.add_theme_stylebox_override("focus", _make_empty_style())
+	button.add_theme_color_override("font_color", Color("#C1C8CF"))
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+	button.add_theme_color_override("font_pressed_color", Color.WHITE)
+
+
+func _style_confirmed_request_slot(button: Button) -> void:
+	var glow_style := _make_black_glow_style(8)
+	button.add_theme_stylebox_override("normal", glow_style)
+	button.add_theme_stylebox_override("hover", glow_style)
+	button.add_theme_stylebox_override("pressed", glow_style)
+	button.add_theme_stylebox_override("disabled", glow_style)
+	button.add_theme_stylebox_override("focus", _make_empty_style())
+	button.add_theme_color_override("font_color", Color("#E9F6FF"))
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+	button.add_theme_color_override("font_pressed_color", Color.WHITE)
+	button.add_theme_color_override("font_disabled_color", Color("#E9F6FF"))
+
+
+func _event_assignment_style(is_complete: bool, content_margin: int) -> StyleBox:
+	if is_complete:
+		return _make_black_glow_style(content_margin)
+	return _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, content_margin)
+
+
+func _make_black_glow_style(content_margin: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#030507")
+	style.border_color = Color("#65BFFF")
+	style.set_border_width_all(2)
+	style.shadow_color = Color(0.18, 0.58, 0.88, 0.9)
+	style.shadow_size = 7
+	style.content_margin_left = content_margin
+	style.content_margin_right = content_margin
+	style.content_margin_top = content_margin
+	style.content_margin_bottom = content_margin
+	return style
 
 
 func _tax_event_border_color(is_paid: bool, can_resolve: bool, is_selected: bool) -> Color:
@@ -1054,15 +1718,26 @@ func _refresh() -> void:
 		and not GameState.tax_manager.has_paid_current_week(GameState.current_day)
 		and not GameState.is_game_over
 	)
-	next_day_button.disabled = GameState.is_game_over
+	var has_open_settlement := not settlement_results_dismissed and not GameState.last_daily_request_results.is_empty()
+	next_day_button.disabled = GameState.is_game_over or GameState.has_pending_job_change() or not GameState.has_player_character() or has_open_settlement
+	_refresh_player_creation_form()
 	_refresh_character_cards()
 	_refresh_character_detail_popup()
+	_refresh_job_change_popup()
+	_refresh_settlement_popup()
 	_refresh_event_list()
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
 
 	if GameState.is_game_over:
 		status_label.text = "Game Over: %s" % GameState.game_over_reason
+	elif GameState.has_pending_job_change():
+		status_label.text = "직업 교육이 완료되었습니다. 전직할 직업을 선택하세요."
+	elif not GameState.last_daily_request_results.is_empty():
+		status_label.text = "전날 의뢰 %s건 정산 완료 · 총수익 %s money" % [
+			GameState.last_daily_request_results.size(),
+			_daily_settlement_total_reward(),
+		]
 	elif tax_can_be_paid:
 		status_label.text = "Tax is due. Resolve the tax event before advancing."
 	elif GameState.office.owned_cards.is_empty() and ContentCatalog.requests.is_empty():
@@ -1135,8 +1810,128 @@ func _refresh_character_detail_popup() -> void:
 	character_detail_content.add_child(_make_character_detail(card))
 
 
+func _refresh_job_change_popup() -> void:
+	_clear_children(job_change_content)
+	var character := GameState.get_pending_job_change_character()
+	if character == null:
+		job_change_popup.visible = false
+		return
+
+	job_change_popup.visible = true
+	job_change_title.text = "%s의 전직" % character.label()
+
+	var current_job_id := GameState.get_character_current_job_id(character)
+	var current_label := _make_label("현재 직업: %s  Lv.%s" % [
+		_job_label(current_job_id),
+		GameState.get_character_job_level(character, current_job_id),
+	], 13)
+	current_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	job_change_content.add_child(current_label)
+
+	for job in ContentCatalog.jobs:
+		job_change_content.add_child(_make_job_change_option(character, job))
+
+
+func _refresh_settlement_popup() -> void:
+	_clear_children(settlement_content)
+	if settlement_results_dismissed or GameState.last_daily_request_results.is_empty():
+		settlement_popup.visible = false
+		return
+
+	settlement_popup.visible = true
+	for raw_result in GameState.last_daily_request_results:
+		var result: Dictionary = raw_result
+		var result_panel := _make_panel(Color("#172633"), WINDOW_BORDER_COLOR)
+		settlement_content.add_child(result_panel)
+
+		var result_box := VBoxContainer.new()
+		result_box.add_theme_constant_override("separation", 5)
+		result_panel.add_child(result_box)
+
+		var result_title := _make_label("%s · %s" % [
+			result.get("request", "의뢰"),
+			result.get("character", "캐릭터"),
+		], 15)
+		result_title.add_theme_color_override("font_color", Color("#D7DEE8"))
+		result_box.add_child(result_title)
+
+		var formula := _make_label("D6 %s + %s %s = %s" % [
+			result.get("die", 0),
+			result.get("stat_name", "주요 능력치"),
+			result.get("stat_value", 0),
+			result.get("total", 0),
+		], 13)
+		formula.add_theme_color_override("font_color", Color("#AAB6C2"))
+		result_box.add_child(formula)
+
+		var outcome := String(result.get("outcome", "실패"))
+		var reward := int(result.get("reward", 0))
+		var outcome_label := _make_label("%s · +%s money" % [outcome, reward], 16)
+		outcome_label.add_theme_color_override("font_color", Color("#F4C95D") if reward > 0 else Color("#8E9AA6"))
+		result_box.add_child(outcome_label)
+
+	var total_label := _make_label("총 정산 금액  +%s money" % _daily_settlement_total_reward(), 20)
+	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	total_label.add_theme_color_override("font_color", Color("#F4C95D"))
+	settlement_content.add_child(total_label)
+
+
+func _daily_settlement_total_reward() -> int:
+	var total := 0
+	for result in GameState.last_daily_request_results:
+		total += int(result.get("reward", 0))
+	return total
+
+
+func _make_job_change_option(character: CardDefinition, job: JobDefinition) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var can_change := GameState.can_change_character_job(character, job.id)
+	var level := GameState.get_character_job_level(character, job.id)
+	var detail := job.label()
+	if level > 0:
+		detail += "  Lv.%s" % level
+	if not job.is_basic_job():
+		detail += "\n%s" % _job_promotion_requirement_text(character, job)
+
+	var label := _make_label(detail, 13)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", Color("#D7DEE8") if can_change else Color("#697682"))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.add_child(label)
+
+	var button := Button.new()
+	button.text = "전직" if level == 0 else "직업 변경"
+	button.custom_minimum_size = Vector2(100, 34)
+	button.focus_mode = Control.FOCUS_NONE
+	button.disabled = not can_change
+	_style_pixel_button(button, can_change)
+	button.pressed.connect(_on_training_job_selected.bind(job.id))
+	row.add_child(button)
+	return row
+
+
+func _job_promotion_requirement_text(character: CardDefinition, job: JobDefinition) -> String:
+	var requirements := PackedStringArray()
+	for prerequisite_id in job.prerequisite_job_ids:
+		var current_level := GameState.get_character_job_level(character, prerequisite_id)
+		var progress := "달성" if current_level >= job.prerequisite_job_level else "현재 Lv.%s" % current_level
+		requirements.append("%s Lv.%s 필요 · %s" % [
+			_job_label(prerequisite_id),
+			job.prerequisite_job_level,
+			progress,
+		])
+
+	if job.required_stats != null and job.required_stats.total() > 0:
+		requirements.append("능력치 %s" % _format_stats(job.required_stats))
+
+	if requirements.is_empty():
+		return "전직 조건: 없음"
+	return "전직 조건: %s" % " / ".join(requirements)
+
+
 func _refresh_event_list() -> void:
-	var requests := ContentCatalog.requests.duplicate()
+	var requests := GameState.office.available_requests.duplicate()
 	requests.sort_custom(Callable(self, "_sort_requests_by_label"))
 	_populate_event_list(requests)
 
@@ -1151,8 +1946,15 @@ func _refresh_inventory_drawer() -> void:
 	inventory_drawer.visible = true
 
 	if active_drawer_type == GameEnums.CardType.CHARACTER:
-		inventory_drawer_title.text = "Personnel Office"
-		_populate_hire_candidate_list()
+		if not String(request_assignment_target_id).is_empty():
+			inventory_drawer_title.text = "의뢰 담당 인물 선택"
+			_populate_job_training_candidate_list()
+		elif is_selecting_job_training_character:
+			inventory_drawer_title.text = "직업 교육 대상 선택"
+			_populate_job_training_candidate_list()
+		else:
+			inventory_drawer_title.text = "Personnel Office"
+			_populate_hire_candidate_list()
 	elif active_drawer_type == GameEnums.CardType.EQUIPMENT:
 		inventory_drawer_title.text = _equipment_drawer_title()
 		_populate_equipment_card_list()
@@ -1181,6 +1983,7 @@ func _populate_card_list(container: VBoxContainer, cards: Array[CardDefinition],
 func _populate_event_list(requests: Array) -> void:
 	_clear_children(event_list)
 	event_list.add_child(_make_tax_payment_event_row())
+	event_list.add_child(_make_job_training_event_row())
 
 	if requests.is_empty():
 		return
@@ -1200,6 +2003,17 @@ func _populate_hire_candidate_list() -> void:
 
 	for card in candidates:
 		inventory_card_list.add_child(_make_hire_candidate_row(card))
+
+
+func _populate_job_training_candidate_list() -> void:
+	_clear_children(inventory_card_list)
+	var characters := _get_cards_by_type(GameEnums.CardType.CHARACTER)
+	if characters.is_empty():
+		inventory_card_list.add_child(_make_empty_label("배치할 수 있는 캐릭터가 없습니다."))
+		return
+
+	for card in characters:
+		inventory_card_list.add_child(_make_character_card_row(card))
 
 
 func _populate_equipment_card_list() -> void:
@@ -1263,12 +2077,7 @@ func _get_available_equipment_cards() -> Array[CardDefinition]:
 
 
 func _get_hire_candidates() -> Array[CardDefinition]:
-	var candidates: Array[CardDefinition] = []
-
-	for card in ContentCatalog.cards:
-		if card != null and card.is_character() and not GameState.office.owned_cards.has(card):
-			candidates.append(card)
-
+	var candidates := GameState.get_hire_candidates()
 	candidates.sort_custom(Callable(self, "_sort_cards_by_label"))
 	return candidates
 
@@ -1313,6 +2122,23 @@ func _set_button_mouse_filter_recursive(node: Node) -> void:
 		_set_button_mouse_filter_recursive(child)
 
 
+func _character_event_assignment_label(card: CardDefinition) -> String:
+	var confirmed_assignment := GameState.get_character_event_assignment(card)
+	if not confirmed_assignment.is_empty():
+		return confirmed_assignment
+
+	if card != null and job_training_candidate_character_id == card.id:
+		return "직업 교육소 (배치 대기)"
+
+	if card != null:
+		for raw_request_id in daily_request_character_ids:
+			if StringName(daily_request_character_ids[raw_request_id]) != card.id:
+				continue
+			var request := ContentCatalog.get_request(StringName(raw_request_id))
+			return "%s (배치 대기)" % (_request_display_title(request) if request != null else String(raw_request_id))
+	return ""
+
+
 func _card_meta(card: CardDefinition) -> String:
 	var parts: PackedStringArray = []
 
@@ -1340,13 +2166,16 @@ func _card_meta(card: CardDefinition) -> String:
 
 
 func _character_job(card: CardDefinition) -> String:
-	if String(card.job).is_empty():
+	return _job_label(GameState.get_character_current_job_id(card))
+
+
+func _job_label(job_id: StringName) -> String:
+	if String(job_id).is_empty():
 		return "Unassigned"
 
-	var job := ContentCatalog.get_job(card.job)
+	var job := ContentCatalog.get_job(job_id)
 	if job == null:
-		return String(card.job)
-
+		return String(job_id)
 	return job.label()
 
 
@@ -1437,13 +2266,27 @@ func _event_meta(request: RequestDefinition) -> String:
 	if request.repeatable_after_expiry:
 		parts.append("repeatable")
 
-	if not request.tags.is_empty():
-		parts.append(", ".join(request.tags))
+	var visible_tags := PackedStringArray()
+	for tag in request.tags:
+		if tag != GameState.DAILY_REQUEST_TAG and tag != GameState.DAILY_INCOME_TAG:
+			visible_tags.append(tag)
+	if not visible_tags.is_empty():
+		parts.append("주요 능력: %s" % ", ".join(visible_tags))
 
 	return " / ".join(parts)
 
 
+func _request_display_title(request: RequestDefinition) -> String:
+	if request.tags.has(GameState.DAILY_REQUEST_TAG):
+		return "[일일 의뢰] %s" % request.label()
+	if request.tags.has(GameState.DAILY_INCOME_TAG):
+		return "[일일 소득] %s" % request.label()
+	return request.label()
+
+
 func _event_rewards(request: RequestDefinition) -> String:
+	if request.tags.has(GameState.DAILY_REQUEST_TAG) or request.tags.has(GameState.DAILY_INCOME_TAG):
+		return "보상: 대성공 40 money / 성공 20 money / 실패 0 money"
 	return "Reward %s money / %s reputation" % [
 		request.reward_money,
 		request.reward_reputation,
@@ -1451,7 +2294,17 @@ func _event_rewards(request: RequestDefinition) -> String:
 
 
 func _on_next_day_pressed() -> void:
+	var previous_day := GameState.current_day
 	GameState.advance_day()
+	if GameState.current_day == previous_day:
+		return
+
+	daily_request_character_ids.clear()
+	request_assignment_target_id = &""
+	settlement_results_dismissed = false
+	selected_event_id = &""
+	_close_inventory_drawer()
+	_refresh()
 
 
 func _on_event_title_pressed(event_id: StringName) -> void:
@@ -1467,6 +2320,8 @@ func _on_event_row_gui_input(event: InputEvent, event_id: StringName) -> void:
 
 func _toggle_event_detail(event_id: StringName) -> void:
 	is_selecting_tax_event_money = false
+	if event_id != JOB_TRAINING_EVENT_ID:
+		is_selecting_job_training_character = false
 
 	if selected_event_id == event_id:
 		selected_event_id = &""
@@ -1484,24 +2339,33 @@ func _on_reset_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	tax_event_money_assigned = false
+	is_selecting_job_training_character = false
+	job_training_candidate_character_id = &""
+	daily_request_character_ids.clear()
+	request_assignment_target_id = &""
+	settlement_results_dismissed = false
+	_reset_player_creation_form()
 	GameState.reset_game()
 
 
 func _on_personnel_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
+	is_selecting_job_training_character = false
 	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
 
 
 func _on_equipment_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
+	is_selecting_job_training_character = false
 	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
 
 
 func _on_consumable_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
+	is_selecting_job_training_character = false
 	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
 
 
@@ -1515,6 +2379,20 @@ func _on_equipment_slot_pressed(character_id: StringName) -> void:
 func _on_level_up_pressed(character_id: StringName) -> void:
 	var character := ContentCatalog.get_card(character_id)
 	if GameState.level_up_character(character):
+		selected_character_card_id = character_id
+		_refresh()
+
+
+func _on_job_level_up_pressed(character_id: StringName) -> void:
+	var character := ContentCatalog.get_card(character_id)
+	if GameState.level_up_current_job(character):
+		selected_character_card_id = character_id
+		_refresh()
+
+
+func _on_change_job_pressed(character_id: StringName, job_id: StringName) -> void:
+	var character := ContentCatalog.get_card(character_id)
+	if GameState.change_character_job(character, job_id):
 		selected_character_card_id = character_id
 		_refresh()
 
@@ -1551,6 +2429,44 @@ func _on_tax_consumable_slot_pressed() -> void:
 	selected_event_id = TAX_PAYMENT_EVENT_ID
 	is_selecting_tax_event_money = true
 	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+
+
+func _on_daily_request_character_slot_pressed(request_id: StringName) -> void:
+	var request := ContentCatalog.get_request(request_id)
+	if request == null or not GameState.office.available_requests.has(request) or GameState.get_daily_request_assigned_character(request) != null:
+		return
+
+	selected_event_id = _request_event_id(request)
+	selected_character_card_id = &""
+	_refresh_character_detail_popup()
+	request_assignment_target_id = request_id
+	is_selecting_job_training_character = false
+	is_selecting_tax_event_money = false
+	equipment_target_character_id = &""
+	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
+
+
+func _on_daily_request_execute_pressed(request_id: StringName) -> void:
+	var request := ContentCatalog.get_request(request_id)
+	var character_id := StringName(daily_request_character_ids.get(request_id, &""))
+	var character := ContentCatalog.get_card(character_id)
+	if not GameState.queue_daily_request(request, character):
+		return
+
+	daily_request_character_ids.erase(request_id)
+	selected_event_id = &""
+	_close_inventory_drawer()
+	_refresh()
+
+
+func _on_daily_request_cancel_pressed(request_id: StringName) -> void:
+	var request := ContentCatalog.get_request(request_id)
+	daily_request_character_ids.erase(request_id)
+	if request != null:
+		GameState.cancel_daily_request_assignment(request)
+	request_assignment_target_id = &""
+	_close_inventory_drawer()
+	_refresh()
 
 
 func _on_money_stack_gui_input(event: InputEvent) -> void:
@@ -1598,6 +2514,47 @@ func _on_tax_event_cancel_pressed() -> void:
 		_refresh()
 
 
+func _on_job_training_character_slot_pressed() -> void:
+	selected_event_id = JOB_TRAINING_EVENT_ID
+	selected_character_card_id = &""
+	_refresh_character_detail_popup()
+	is_selecting_job_training_character = true
+	equipment_target_character_id = &""
+	is_selecting_tax_event_money = false
+	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
+
+
+func _on_job_training_cancel_pressed() -> void:
+	if not String(job_training_candidate_character_id).is_empty():
+		job_training_candidate_character_id = &""
+		is_selecting_job_training_character = false
+		_close_inventory_drawer()
+		_refresh()
+		return
+
+	if GameState.cancel_job_training():
+		is_selecting_job_training_character = false
+		_close_inventory_drawer()
+
+
+func _on_job_training_execute_pressed() -> void:
+	var character := ContentCatalog.get_card(job_training_candidate_character_id)
+	if character == null:
+		return
+
+	job_training_candidate_character_id = &""
+	selected_event_id = &""
+	is_selecting_job_training_character = false
+	if GameState.assign_job_training(character):
+		_refresh()
+
+
+func _on_training_job_selected(job_id: StringName) -> void:
+	if GameState.complete_job_training(job_id):
+		selected_event_id = JOB_TRAINING_EVENT_ID
+		_refresh()
+
+
 func _open_inventory_drawer(card_type: int) -> void:
 	active_drawer_type = card_type
 
@@ -1609,6 +2566,8 @@ func _close_inventory_drawer() -> void:
 	active_drawer_type = NO_ACTIVE_DRAWER
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
+	is_selecting_job_training_character = false
+	request_assignment_target_id = &""
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
 
@@ -1648,6 +2607,26 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			if not String(request_assignment_target_id).is_empty():
+				var request_id := request_assignment_target_id
+				var request := ContentCatalog.get_request(request_id)
+				var request_character := ContentCatalog.get_card(card_id)
+				if _character_event_assignment_label(request_character).is_empty() and GameState.can_queue_daily_request(request, request_character):
+					daily_request_character_ids[request_id] = card_id
+					selected_event_id = _request_event_id(request)
+					_close_inventory_drawer()
+					_refresh()
+				return
+
+			if is_selecting_job_training_character:
+				var training_character := ContentCatalog.get_card(card_id)
+				if _character_event_assignment_label(training_character).is_empty() and GameState.can_assign_job_training(training_character):
+					job_training_candidate_character_id = card_id
+					selected_event_id = JOB_TRAINING_EVENT_ID
+					_close_inventory_drawer()
+					_refresh()
+				return
+
 			if selected_character_card_id == card_id:
 				selected_character_card_id = &""
 			else:
@@ -1667,6 +2646,11 @@ func _close_character_detail_popup() -> void:
 
 	_refresh_character_cards()
 	_refresh_character_detail_popup()
+
+
+func _close_settlement_popup() -> void:
+	settlement_results_dismissed = true
+	_refresh()
 
 
 func _on_hire_pressed(card_id: StringName) -> void:

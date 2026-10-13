@@ -7,8 +7,8 @@
 script = ExtResource("2_stats")
 strength = 100
 agility = 100
-intelligence = 100
-charm = 100
+intelligence = 110
+charm = 120
 health = 100
 
 [resource]

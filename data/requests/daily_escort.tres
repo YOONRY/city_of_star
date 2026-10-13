@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="RequestDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/requests/request_definition.gd" id="1_request"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_required"]
+script = ExtResource("2_stats")
+strength = 1
+health = 1
+
+[resource]
+script = ExtResource("1_request")
+id = &"daily_escort"
+title = "호위"
+request_type = 1
+duration_days = 1
+valid_days = 1
+required_stats = SubResource("Resource_required")
+reward_money = 22
+reward_reputation = 1
+tags = PackedStringArray("daily_request", "힘+체력")

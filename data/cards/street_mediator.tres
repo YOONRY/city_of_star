@@ -7,17 +7,17 @@
 script = ExtResource("2_stats")
 strength = 1
 agility = 2
-intelligence = 3
-charm = 5
-health = 18
+intelligence = 1
+charm = 2
+health = 1
 
 [sub_resource type="Resource" id="Resource_growth"]
 script = ExtResource("2_stats")
-strength = 80
-agility = 90
-intelligence = 110
-charm = 130
-health = 100
+strength = 20
+agility = 20
+intelligence = 10
+charm = 50
+health = 10
 
 [resource]
 script = ExtResource("1_card")
@@ -29,5 +29,5 @@ growth = SubResource("Resource_growth")
 skill_ids = PackedStringArray("negotiate")
 weekly_wage = 18
 species = &"human"
-job = &"Mediator"
+job = &"Trickster"
 tags = PackedStringArray("starter", "character")
