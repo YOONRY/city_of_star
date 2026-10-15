@@ -35,9 +35,10 @@ CREATE TABLE skills (
     ap_cost INTEGER,
     effect_text TEXT NOT NULL,
     usable_columns TEXT NOT NULL DEFAULT '',
-    unusable_columns TEXT NOT NULL DEFAULT '',
     required_equipment TEXT NOT NULL DEFAULT '',
     target_text TEXT NOT NULL DEFAULT '',
+    main_stat TEXT NOT NULL DEFAULT '',
+    damage_type INTEGER NOT NULL DEFAULT 0 CHECK (damage_type IN (0, 1, 2)),
     FOREIGN KEY (skill_type_id) REFERENCES skill_types(id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
@@ -80,9 +81,9 @@ INSERT INTO skills (
     ap_cost,
     effect_text,
     usable_columns,
-    unusable_columns,
     required_equipment,
-    target_text
+    target_text,
+    damage_type
 ) VALUES
     (
         1,
@@ -91,9 +92,9 @@ INSERT INTO skills (
         NULL,
         '앞으로 2열 전진하면서 같은 행의 1열을 공격한다.',
         '2,3,4',
-        '1',
         '근접무기',
-        '같은 행의 1열'
+        '같은 행의 1열',
+        1
     ),
     (
         2,
@@ -103,8 +104,8 @@ INSERT INTO skills (
         '받는 피해가 10% 감소한다.',
         '1,2,3,4',
         '',
-        '',
-        '자신'
+        '자신',
+        0
     );
 
 INSERT INTO job_skill_unlocks (job_id, skill_id, unlock_level) VALUES

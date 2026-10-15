@@ -900,6 +900,8 @@ func _make_character_status_tab(card: CardDefinition) -> VBoxContainer:
 	_add_metric(stats, "INT").text = str(effective_stats.intelligence)
 	_add_metric(stats, "CHM").text = str(effective_stats.charm)
 	_add_metric(stats, "HP").text = str(effective_stats.health)
+	_add_metric(stats, "DEF").text = str(effective_stats.defense)
+	_add_metric(stats, "MDEF").text = str(effective_stats.magic_defense)
 
 	return tab
 
@@ -1150,7 +1152,9 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 			equipment.label(),
 			_format_stats(equipment.stats),
 		]
-		button.tooltip_text = "Click to unequip."
+		button.clip_text = true
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		button.tooltip_text = "%s\n%s\nClick to unequip." % [equipment.label(), _format_stats(equipment.stats)]
 		_style_pixel_button(button, false)
 		button.pressed.connect(_on_unequip_pressed.bind(character.id, equipment.id))
 
@@ -2225,13 +2229,18 @@ func _format_stats(stats: StatBlock) -> String:
 	if stats == null:
 		return "STR 0  AGI 0  INT 0  CHM 0  HP 0"
 
-	return "STR %s  AGI %s  INT %s  CHM %s  HP %s" % [
+	var formatted_stats := "STR %s  AGI %s  INT %s  CHM %s  HP %s" % [
 		stats.strength,
 		stats.agility,
 		stats.intelligence,
 		stats.charm,
 		stats.health,
 	]
+	if stats.defense != 0:
+		formatted_stats += "  DEF %s" % stats.defense
+	if stats.magic_defense != 0:
+		formatted_stats += "  MDEF %s" % stats.magic_defense
+	return formatted_stats
 
 
 func _format_level_up_gain(stats: StatBlock) -> String:

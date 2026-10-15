@@ -1,11 +1,15 @@
 extends Resource
 class_name StatBlock
 
+const GROWTH_STAT_NAMES := ["strength", "agility", "intelligence", "charm", "health"]
+
 @export var strength: int = 0
 @export var agility: int = 0
 @export var intelligence: int = 0
 @export var charm: int = 0
 @export var health: int = 0
+@export var defense: int = 0
+@export var magic_defense: int = 0
 
 func clone() -> StatBlock:
 	var block := StatBlock.new()
@@ -14,6 +18,15 @@ func clone() -> StatBlock:
 	block.intelligence = intelligence
 	block.charm = charm
 	block.health = health
+	block.defense = defense
+	block.magic_defense = magic_defense
+	return block
+
+
+func growth_only() -> StatBlock:
+	var block := clone()
+	block.defense = 0
+	block.magic_defense = 0
 	return block
 
 
@@ -26,6 +39,8 @@ func add(other: StatBlock) -> StatBlock:
 	intelligence += other.intelligence
 	charm += other.charm
 	health += other.health
+	defense += other.defense
+	magic_defense += other.magic_defense
 	return self
 
 
@@ -35,6 +50,7 @@ func plus(other: StatBlock) -> StatBlock:
 
 
 func floor_divided(divisor: int) -> StatBlock:
+	# Only the five growing stats can produce initial stats or level-up gains.
 	var safe_divisor := maxi(1, divisor)
 	var block := StatBlock.new()
 	block.strength = floori(float(strength) / float(safe_divisor))
@@ -55,11 +71,13 @@ func meets(required: StatBlock) -> bool:
 		and intelligence >= required.intelligence
 		and charm >= required.charm
 		and health >= required.health
+		and defense >= required.defense
+		and magic_defense >= required.magic_defense
 	)
 
 
 func total() -> int:
-	return strength + agility + intelligence + charm + health
+	return strength + agility + intelligence + charm + health + defense + magic_defense
 
 
 func as_dictionary() -> Dictionary:
@@ -69,4 +87,6 @@ func as_dictionary() -> Dictionary:
 		"intelligence": intelligence,
 		"charm": charm,
 		"health": health,
+		"defense": defense,
+		"magic_defense": magic_defense,
 	}

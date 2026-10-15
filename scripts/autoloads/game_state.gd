@@ -36,6 +36,7 @@ var last_tax_payment_amount: int = 0
 var equipped_card_ids_by_character_id: Dictionary = {}
 var character_levels_by_id: Dictionary = {}
 var character_bonus_stats_by_id: Dictionary = {}
+var character_skill_bonus_stats_by_id: Dictionary = {}
 var character_current_job_by_id: Dictionary = {}
 var character_job_levels_by_id: Dictionary = {}
 var character_job_history_by_id: Dictionary = {}
@@ -66,6 +67,7 @@ func reset_game() -> void:
 	equipped_card_ids_by_character_id.clear()
 	character_levels_by_id.clear()
 	character_bonus_stats_by_id.clear()
+	character_skill_bonus_stats_by_id.clear()
 	character_current_job_by_id.clear()
 	character_job_levels_by_id.clear()
 	character_job_history_by_id.clear()
@@ -358,8 +360,11 @@ func can_create_player_character(
 		return false
 	if growth == null or growth.total() != PLAYER_GROWTH_BUDGET:
 		return false
+	if growth.defense != 0 or growth.magic_defense != 0:
+		return false
 
-	for value in growth.as_dictionary().values():
+	for stat_name in StatBlock.GROWTH_STAT_NAMES:
+		var value := int(growth.get(stat_name))
 		if int(value) < PLAYER_GROWTH_MIN_PER_STAT or int(value) > PLAYER_GROWTH_MAX_PER_STAT:
 			return false
 		if int(value) % 10 != 0:
@@ -427,7 +432,48 @@ func get_character_bonus_stats(character: CardDefinition) -> StatBlock:
 	if raw_stats == null:
 		return stats
 
-	return raw_stats.clone()
+	return raw_stats.growth_only()
+
+
+func get_character_skill_bonus_stats(character: CardDefinition) -> StatBlock:
+	var stats := StatBlock.new()
+	if character == null or not character.is_character():
+		return stats
+
+	var bonuses: Dictionary = character_skill_bonus_stats_by_id.get(character.id, {})
+	for bonus in bonuses.values():
+		stats.add(bonus as StatBlock)
+	return stats
+
+
+func set_character_skill_bonus_stats(character: CardDefinition, skill_id: StringName, bonus: StatBlock) -> bool:
+	if is_game_over or character == null or not character.is_character():
+		return false
+	if not office.owned_cards.has(character) or String(skill_id).is_empty() or bonus == null:
+		return false
+
+	var bonuses: Dictionary = character_skill_bonus_stats_by_id.get(character.id, {})
+	bonuses[skill_id] = bonus.clone()
+	character_skill_bonus_stats_by_id[character.id] = bonuses
+	state_changed.emit()
+	return true
+
+
+func remove_character_skill_bonus_stats(character: CardDefinition, skill_id: StringName) -> bool:
+	if character == null or not character.is_character():
+		return false
+
+	var bonuses: Dictionary = character_skill_bonus_stats_by_id.get(character.id, {})
+	if not bonuses.has(skill_id):
+		return false
+
+	bonuses.erase(skill_id)
+	if bonuses.is_empty():
+		character_skill_bonus_stats_by_id.erase(character.id)
+	else:
+		character_skill_bonus_stats_by_id[character.id] = bonuses
+	state_changed.emit()
+	return true
 
 
 func get_character_current_job_id(character: CardDefinition) -> StringName:
@@ -518,7 +564,7 @@ func get_character_growth(character: CardDefinition) -> StatBlock:
 	for mastered_job_id in get_character_mastered_job_ids(character):
 		if mastered_job_id != current_job_id:
 			growth.add(ContentCatalog.get_job_growth(mastered_job_id))
-	return growth
+	return growth.growth_only()
 
 
 func get_character_level_up_gain(character: CardDefinition) -> StatBlock:
@@ -733,11 +779,12 @@ func get_effective_stats(card: CardDefinition) -> StatBlock:
 	if card == null or card.stats == null:
 		return stats
 
-	stats = card.stats.clone()
 	if not card.is_character():
-		return stats
+		return card.stats.clone()
 
+	stats = card.stats.growth_only()
 	stats.add(get_character_bonus_stats(card))
+	stats.add(get_character_skill_bonus_stats(card))
 
 	for equipment in get_equipped_cards(card):
 		stats.add(equipment.stats)
@@ -832,7 +879,7 @@ func _generate_recruit_growth() -> StatBlock:
 	growth.health = 10
 	var target_total := recruit_rng.randi_range(10, 12) * 10
 	var points_to_distribute := target_total - growth.total()
-	var stat_names := ["strength", "agility", "intelligence", "charm", "health"]
+	var stat_names := StatBlock.GROWTH_STAT_NAMES
 	while points_to_distribute > 0:
 		var stat_name: String = stat_names[recruit_rng.randi_range(0, stat_names.size() - 1)]
 		growth.set(stat_name, int(growth.get(stat_name)) + 10)
