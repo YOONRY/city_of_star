@@ -1,0 +1,1139 @@
+{
+  "format_version": 1,
+  "skill_types": [
+    {
+      "id": 1,
+      "display_name": "액티브",
+      "description": "턴 중 AP나 조건을 소비해 직접 사용하는 스킬"
+    },
+    {
+      "id": 2,
+      "display_name": "패시브",
+      "description": "조건을 만족하면 지속적으로 적용되는 스킬"
+    }
+  ],
+  "skills": [
+    {
+      "id": 1,
+      "display_name": "돌진",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "앞으로 2열 전진하면서 같은 행의 1열을 90%의 피해로 공격한다.",
+      "usable_columns": [
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "근접무기",
+      "target_text": "같은 행의 1열",
+      "main_stat": "힘1.0",
+      "damage_type": 1
+    },
+    {
+      "id": 2,
+      "display_name": "내구력",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "받는 피해가 10% 감소한다.",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 3,
+      "display_name": "철인",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "3턴간 자신이 받는 피해가 20% 감소한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 4,
+      "display_name": "스텟 증가 힘",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "자신의 힘을 3 올린다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 5,
+      "display_name": "강타",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "160%의 피해를 준다",
+      "usable_columns": [
+        1,
+        2
+      ],
+      "required_equipment": "근접무기",
+      "target_text": "상대 1,2열 단일 대상",
+      "main_stat": "힘1.0",
+      "damage_type": 1
+    },
+    {
+      "id": 6,
+      "display_name": "검날개선",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "3턴간 주는 피해가 30% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 7,
+      "display_name": "수호",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "2턴간 지정한 아군의 공격을 대신 맞는다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "아군",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 8,
+      "display_name": "체력단련",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "체력이 1 증가하고 체력 성장치가 20 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 9,
+      "display_name": "일격",
+      "skill_type_id": 1,
+      "ap_cost": 3,
+      "effect_text": "적에게 250%만큼의 피해를 준다",
+      "usable_columns": [
+        1
+      ],
+      "required_equipment": "근접무기",
+      "target_text": "1열의 적",
+      "main_stat": "힘2.0",
+      "damage_type": 1
+    },
+    {
+      "id": 10,
+      "display_name": "불굴",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "감소한 체력 20%당 주는 피해가 5% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 11,
+      "display_name": "한 발에 두 놈",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "80%의 데미지로 2명 공격한다",
+      "usable_columns": [
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "사격무기",
+      "target_text": "적 2명",
+      "main_stat": "힘0.5+민첩1.0",
+      "damage_type": 1
+    },
+    {
+      "id": 12,
+      "display_name": "집중",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "치명타 확률이 10% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 13,
+      "display_name": "속박사격",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "대상에게 90%만큼의 피해를 주고 속박시킨다",
+      "usable_columns": [
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "사격무기",
+      "target_text": "적 1명",
+      "main_stat": "힘0.5+민첩1.0",
+      "damage_type": 1
+    },
+    {
+      "id": 14,
+      "display_name": "손은 눈보다 빠르리",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "매 턴 첫 공격의 주는피해가 20% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 15,
+      "display_name": "바람타기",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "자신의 민첩을 3 올린다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 16,
+      "display_name": "영거리사격",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "160%만큼의 피해를 주고 뒤로 2열 이동한다",
+      "usable_columns": [
+        1
+      ],
+      "required_equipment": "사격무기",
+      "target_text": "적 1명",
+      "main_stat": "힘 0.5+민첩1.0",
+      "damage_type": 1
+    },
+    {
+      "id": 17,
+      "display_name": "머리를 노려",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "치명타 데미지가 30% 늘어난다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 18,
+      "display_name": "민첩함",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "자신의 민첩과 힘의 성장치가 20씩 오른다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 19,
+      "display_name": "달리는자",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "민첩을 요구하는 능력 체크 시 3만큼 보정값을 얻는다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 20,
+      "display_name": "초집중",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "3턴간 자신의 치명타의 데미지가 100% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 21,
+      "display_name": "마법구체",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "대상에게 즉시 110%만큼의 피헤를 준다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "적 1체",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 22,
+      "display_name": "지식인",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "지능 요구 체크 시 5만큼의 보정치를 가짐",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 23,
+      "display_name": "캐스팅",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "다음 턴에 AP를 2 획득한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 24,
+      "display_name": "화염구",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "2X2 영역에 130%만큼의 피해를 입힌다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "영역 2X2",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 25,
+      "display_name": "이익 계산",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "거래시 20% 이득을 본다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 26,
+      "display_name": "지식 습득",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "자신의 지능성장이 40 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 27,
+      "display_name": "얼음송곳",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "1X3영역에 140%만큼의 피해를 준다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법 장비",
+      "target_text": "영역 1X3",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 28,
+      "display_name": "마력 부하",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "소모한 ap 1당 피해가 10%씩 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 29,
+      "display_name": "과부하",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "자신이 주는 마법 피해가 70% 증가한다, 다음턴 행동하지 못한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 30,
+      "display_name": "지진",
+      "skill_type_id": 1,
+      "ap_cost": 3,
+      "effect_text": "적 전체에게 170%만큼의 피해를 준다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "적 전체",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 31,
+      "display_name": "신성한 일격",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "적 1체에게 피해를 80% 주고 자신의 체력을 2 회복한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "적 1체",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 32,
+      "display_name": "치료",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "아군 1체를 지능/2 만큼 치유한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "아군 1체",
+      "main_stat": "지능",
+      "damage_type": 0
+    },
+    {
+      "id": 33,
+      "display_name": "의무병",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "모든 치유 행위에 2만큼 더 회복됨",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 34,
+      "display_name": "신성무기",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "아군의 공격에 시전자의 20% 만큼의 추가 피해를 가하는 효과를 부여",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "아군 1체",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 35,
+      "display_name": "축복 받음",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "50% 확률로 받는 피해가 50% 감소함",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 36,
+      "display_name": "이중 치유",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "아군 2명을 지능/2 + 2만큼 치유한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법 장비",
+      "target_text": "아군 2명",
+      "main_stat": "지능",
+      "damage_type": 0
+    },
+    {
+      "id": 37,
+      "display_name": "약화",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "적 1체의 주는 피해를 20% 감소 시킨다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "마법 장비",
+      "target_text": "적 1체",
+      "main_stat": "지능",
+      "damage_type": 0
+    },
+    {
+      "id": 38,
+      "display_name": "신성함",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "자신의 지능 성장과 체력 성장을 30씩 올린다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 39,
+      "display_name": "신성화살",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "적 1체에게 110%만큼의 피해를 주고 대상의 받는 피해를 10% 증가시킨다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "적1체",
+      "main_stat": "지능",
+      "damage_type": 2
+    },
+    {
+      "id": 40,
+      "display_name": "구원",
+      "skill_type_id": 1,
+      "ap_cost": 3,
+      "effect_text": "아군 전체를 최대 체력의 50%만큼 회복 시키고 초과한 치유분 만큼 보호막을 부여한다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "마법장비",
+      "target_text": "아군",
+      "main_stat": "지능",
+      "damage_type": 0
+    },
+    {
+      "id": 41,
+      "display_name": "비겁한 일격",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "적 1체에게 피해를 80%만큼 주고 은신 상태가 된다",
+      "usable_columns": [
+        1,
+        2
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "적 1체",
+      "main_stat": "민첩",
+      "damage_type": 1
+    },
+    {
+      "id": 42,
+      "display_name": "기습",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "은신 상태에서 공격할때 피해가 50% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 43,
+      "display_name": "단검 투척",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "적 1체에게 110%피해를 준다 은신 중이면 추가로 40%를 준다",
+      "usable_columns": [
+        1,
+        2,
+        3
+      ],
+      "required_equipment": "",
+      "target_text": "적 1체",
+      "main_stat": "민첩",
+      "damage_type": 1
+    },
+    {
+      "id": 44,
+      "display_name": "거리의 도둑",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "소매치기가 가능해진다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 45,
+      "display_name": "숨기",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "다음턴까지 은신한다, 턴을 종료한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 46,
+      "display_name": "연막탄",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "2X2영역에 명중률 감소 디버프를 건다",
+      "usable_columns": [
+        1,
+        2,
+        3
+      ],
+      "required_equipment": "",
+      "target_text": "영역 2X2",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 47,
+      "display_name": "살수",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "3턴간 주는 피해와 받는 피해가 30% 씩 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 48,
+      "display_name": "마무리",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "적 1체에게 80%의 데미지를 준다, 처치시 AP를 돌려 받는다",
+      "usable_columns": [
+        1,
+        2
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "1,2열 적 1체",
+      "main_stat": "민첩 0.8 + 힘 0.2",
+      "damage_type": 1
+    },
+    {
+      "id": 49,
+      "display_name": "도주",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "적을 처치한 턴 AP소모 없이 이동 가능",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 50,
+      "display_name": "암살",
+      "skill_type_id": 1,
+      "ap_cost": 3,
+      "effect_text": "적 1체에게 170%의 피해를 준다 은신 상태일시 반드시 치명타로 들어가고 피해량이 70% 증가한다",
+      "usable_columns": [
+        1,
+        2
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "적 1,2열 1체",
+      "main_stat": "민첩 1.0 + 근력 0.5",
+      "damage_type": 1
+    },
+    {
+      "id": 51,
+      "display_name": "호신검무",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "적 1체에게 90%의 피해를 주고 뒤로 2칸 이동한다",
+      "usable_columns": [
+        1,
+        2
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "적 1,2열 1체",
+      "main_stat": "민첩 0.9",
+      "damage_type": 1
+    }
+  ],
+  "jobs": [
+    {
+      "id": "Archer",
+      "display_name": "사수"
+    },
+    {
+      "id": "Fighter",
+      "display_name": "투사"
+    },
+    {
+      "id": "Mage",
+      "display_name": "마법사"
+    },
+    {
+      "id": "Priest",
+      "display_name": "사제"
+    },
+    {
+      "id": "Spy",
+      "display_name": "첩자"
+    },
+    {
+      "id": "Trickster",
+      "display_name": "재주꾼"
+    }
+  ],
+  "job_skill_unlocks": [
+    {
+      "job_id": "Archer",
+      "skill_id": 11,
+      "unlock_level": 1
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 12,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 13,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 14,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 15,
+      "unlock_level": 5
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 16,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 17,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 18,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 19,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Archer",
+      "skill_id": 20,
+      "unlock_level": 10
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 1,
+      "unlock_level": 1
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 2,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 3,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 4,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 5,
+      "unlock_level": 5
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 6,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 7,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 8,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 9,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Fighter",
+      "skill_id": 10,
+      "unlock_level": 10
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 21,
+      "unlock_level": 1
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 22,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 23,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 24,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 25,
+      "unlock_level": 5
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 26,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 27,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 28,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 29,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Mage",
+      "skill_id": 30,
+      "unlock_level": 10
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 31,
+      "unlock_level": 1
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 32,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 33,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 34,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 35,
+      "unlock_level": 5
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 36,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 37,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 38,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 39,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Priest",
+      "skill_id": 40,
+      "unlock_level": 10
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 41,
+      "unlock_level": 1
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 42,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 43,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 44,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 45,
+      "unlock_level": 5
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 46,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 47,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 48,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 49,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Spy",
+      "skill_id": 50,
+      "unlock_level": 10
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 51,
+      "unlock_level": 1
+    }
+  ]
+}

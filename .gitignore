@@ -7,6 +7,11 @@ export/
 exports/
 *.tmp
 *.log
+__pycache__/
+*.pyc
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # Local design drafts
 *.docx

@@ -942,10 +942,31 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	job_skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
 	tab.add_child(job_skill_title)
 
-	var job_skill_label := _make_label(_format_string_array(GameState.get_character_job_skill_ids(card), "None"), 12)
-	job_skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
-	job_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tab.add_child(job_skill_label)
+	var learned_skill_ids := GameState.get_character_job_skill_ids(card)
+	if learned_skill_ids.is_empty():
+		tab.add_child(_make_label("None", 12))
+	for skill_id in learned_skill_ids:
+		tab.add_child(_make_job_skill_entry(skill_id))
+
+	var current_job_id := GameState.get_character_current_job_id(card)
+	var current_job := ContentCatalog.get_job(current_job_id)
+	var job_level := GameState.get_character_job_level(card, current_job_id)
+	if current_job != null:
+		var upcoming := VBoxContainer.new()
+		upcoming.add_theme_constant_override("separation", 8)
+		for index in current_job.skill_ids.size():
+			var unlock_level := 1
+			if index < current_job.skill_unlock_levels.size():
+				unlock_level = current_job.skill_unlock_levels[index]
+			if unlock_level > job_level and not learned_skill_ids.has(current_job.skill_ids[index]):
+				upcoming.add_child(_make_job_skill_entry(current_job.skill_ids[index], unlock_level))
+		if upcoming.get_child_count() > 0:
+			var upcoming_title := _make_label("미습득 직업 스킬", 13)
+			upcoming_title.add_theme_color_override("font_color", Color("#F4C95D"))
+			tab.add_child(upcoming_title)
+			tab.add_child(upcoming)
+		else:
+			upcoming.free()
 
 	var tag_title := _make_label("Tags", 13)
 	tag_title.add_theme_color_override("font_color", Color("#F4C95D"))
@@ -956,6 +977,55 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(tag_label)
 	return tab
+
+
+func _make_job_skill_entry(skill_id: String, unlock_level: int = 0) -> VBoxContainer:
+	var entry := VBoxContainer.new()
+	entry.add_theme_constant_override("separation", 4)
+	entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var skill := ContentCatalog.get_skill(int(skill_id)) if skill_id.is_valid_int() else null
+	if skill == null:
+		var legacy_label := _make_label(skill_id, 12)
+		legacy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		entry.add_child(legacy_label)
+		return entry
+
+	var title_text := skill.display_name
+	if unlock_level > 0:
+		title_text += " · Lv.%s" % unlock_level
+	var title := _make_label(title_text, 14)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_color_override("font_color", Color("#AAB6C2") if unlock_level > 0 else Color("#F4C95D"))
+	entry.add_child(title)
+	var metadata := PackedStringArray([skill.type_label()])
+	if skill.is_active():
+		metadata.append("AP %s" % skill.ap_cost if skill.ap_cost >= 0 else "AP 미정")
+	if not skill.damage_label().is_empty():
+		metadata.append(skill.damage_label())
+	var metadata_label := _make_label(" · ".join(metadata), 12)
+	metadata_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	entry.add_child(metadata_label)
+	var description := _make_label(skill.effect_text, 12)
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.add_theme_color_override("font_color", Color("#D7DEE8"))
+	entry.add_child(description)
+
+	var columns := PackedStringArray()
+	for column in skill.usable_columns:
+		columns.append(str(column))
+	var conditions := PackedStringArray(["사용 열: %s" % ", ".join(columns)])
+	if not skill.required_equipment.is_empty():
+		conditions.append("장비: %s" % skill.required_equipment)
+	if not skill.main_stat.is_empty():
+		conditions.append("주 스탯: %s" % skill.main_stat)
+	if not skill.target_text.is_empty():
+		conditions.append("대상: %s" % skill.target_text)
+	var conditions_label := _make_label(" · ".join(conditions), 12)
+	conditions_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	conditions_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	entry.add_child(conditions_label)
+	entry.add_child(HSeparator.new())
+	return entry
 
 
 func _make_character_job_history_tab(card: CardDefinition) -> VBoxContainer:
@@ -1774,6 +1844,10 @@ func _refresh_character_cards() -> void:
 
 
 func _refresh_character_detail_popup() -> void:
+	var selected_tab := 0
+	for child in character_detail_content.get_children():
+		if child is TabContainer:
+			selected_tab = child.current_tab
 	_clear_children(character_detail_content)
 
 	if String(selected_character_card_id).is_empty():
@@ -1811,7 +1885,9 @@ func _refresh_character_detail_popup() -> void:
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary_text.add_child(job_label)
 
-	character_detail_content.add_child(_make_character_detail(card))
+	var detail := _make_character_detail(card)
+	character_detail_content.add_child(detail)
+	detail.current_tab = mini(selected_tab, detail.get_tab_count() - 1)
 
 
 func _refresh_job_change_popup() -> void:

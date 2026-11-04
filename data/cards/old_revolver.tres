@@ -16,6 +16,7 @@ script = ExtResource("1_card")
 id = &"old_revolver"
 display_name = "Old Revolver"
 card_type = 1
+equipment_category = "사격무기"
 stats = SubResource("Resource_stats")
 skill_ids = PackedStringArray()
 weekly_wage = 0

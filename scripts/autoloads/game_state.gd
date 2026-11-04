@@ -548,6 +548,29 @@ func get_character_job_skill_ids(character: CardDefinition) -> PackedStringArray
 	return learned
 
 
+func get_character_skill_use_errors(character: CardDefinition, skill_id: int, column: int, available_ap: int) -> PackedStringArray:
+	var errors := PackedStringArray()
+	if is_game_over or character == null or not character.is_character() or not office.owned_cards.has(character):
+		errors.append("스킬을 사용할 인물이 없습니다.")
+		return errors
+	var skill := ContentCatalog.get_skill(skill_id)
+	if skill == null:
+		errors.append("등록되지 않은 스킬입니다.")
+		return errors
+	var known_ids := get_character_job_skill_ids(character)
+	known_ids.append_array(character.skill_ids)
+	var species_definition: Variant = ContentCatalog.get_species(character.species)
+	if species_definition != null:
+		known_ids.append_array(species_definition.skill_ids)
+	if not known_ids.has(str(skill_id)):
+		errors.append("습득하지 않은 스킬입니다.")
+		return errors
+	var equipment_categories := PackedStringArray()
+	for equipment in get_equipped_cards(character):
+		equipment_categories.append(equipment.equipment_category)
+	return skill.get_use_errors(column, available_ap, equipment_categories)
+
+
 func get_character_growth(character: CardDefinition) -> StatBlock:
 	var growth := StatBlock.new()
 	if character == null or not character.is_character():

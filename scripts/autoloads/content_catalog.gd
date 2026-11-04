@@ -7,22 +7,28 @@ const CARD_DIRECTORY := "res://data/cards"
 const JOB_DIRECTORY := "res://data/jobs"
 const SPECIES_DIRECTORY := "res://data/species"
 const REQUEST_DIRECTORY := "res://data/requests"
+const SKILL_DATABASE_PATH := "res://data/skills/skill_database.json"
 const SPECIES_SCRIPT := preload("res://scripts/core/species_definition.gd")
 
 var cards: Array[CardDefinition] = []
 var jobs: Array[JobDefinition] = []
 var species: Array[Resource] = []
 var requests: Array[RequestDefinition] = []
+var skills: Array[SkillDefinition] = []
 var cards_by_id: Dictionary = {}
 var jobs_by_id: Dictionary = {}
 var species_by_id: Dictionary = {}
 var requests_by_id: Dictionary = {}
+var skills_by_id: Dictionary = {}
+var database_jobs_by_id: Dictionary = {}
+var job_skill_unlocks: Array[Dictionary] = []
 
 func _ready() -> void:
 	reload()
 
 
 func reload() -> void:
+	_load_skill_database()
 	_load_jobs()
 	_load_species()
 	_load_cards()
@@ -40,6 +46,10 @@ func get_request(id: StringName) -> RequestDefinition:
 
 func get_job(id: StringName) -> JobDefinition:
 	return jobs_by_id.get(id, null) as JobDefinition
+
+
+func get_skill(id: int) -> SkillDefinition:
+	return skills_by_id.get(id, null) as SkillDefinition
 
 
 func get_species(id: StringName):
@@ -92,10 +102,45 @@ func _load_jobs() -> void:
 
 	for resource in _load_resource_files(JOB_DIRECTORY):
 		if resource is JobDefinition:
-			var job := resource as JobDefinition
+			var job := resource.duplicate(true) as JobDefinition
 			jobs.append(job)
 			if not String(job.id).is_empty():
 				jobs_by_id[job.id] = job
+			if database_jobs_by_id.has(String(job.id)):
+				job.display_name = str(database_jobs_by_id[String(job.id)]["display_name"])
+				job.skill_ids = PackedStringArray()
+				job.skill_unlock_levels = PackedInt32Array()
+				for unlock in job_skill_unlocks:
+					if str(unlock["job_id"]) == String(job.id):
+						job.skill_ids.append(str(int(unlock["skill_id"])))
+						job.skill_unlock_levels.append(int(unlock["unlock_level"]))
+
+
+func _load_skill_database() -> void:
+	skills.clear()
+	skills_by_id.clear()
+	database_jobs_by_id.clear()
+	job_skill_unlocks.clear()
+	var file := FileAccess.open(SKILL_DATABASE_PATH, FileAccess.READ)
+	if file == null:
+		push_error("Skill catalog is missing. Run tools/export_skill_database.py.")
+		return
+	var json := JSON.new()
+	if json.parse(file.get_as_text()) != OK:
+		push_error("Skill catalog JSON error: %s" % json.get_error_message())
+		return
+	var data: Variant = json.data
+	if not data is Dictionary or int(data.get("format_version", 0)) != 1:
+		push_error("Unsupported skill catalog format.")
+		return
+	for record: Dictionary in data["skills"]:
+		var skill := SkillDefinition.from_record(record)
+		skills.append(skill)
+		skills_by_id[skill.id] = skill
+	for record: Dictionary in data["jobs"]:
+		database_jobs_by_id[str(record["id"])] = record
+	for unlock: Dictionary in data["job_skill_unlocks"]:
+		job_skill_unlocks.append(unlock)
 
 
 func _load_species() -> void:
