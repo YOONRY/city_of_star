@@ -21,6 +21,15 @@
 
 `data/cards`, `data/jobs`, `data/species`, `data/requests`의 `.tres` 또는 `.res`를 `ContentCatalog`가 재귀적으로 읽습니다.
 
+## 시설 이벤트
+
+상점과 인력 사무소는 의뢰 판정과 별도로 매일 이벤트 목록에 표시됩니다. `GameState`는 확정한 시설별 담당 인물을 보관하고
+일일 의뢰·직업 교육과의 중복 배치를 검사합니다. 확정된 배치는 하루를 넘기기 전까지 취소할 수 있습니다. 날짜가 바뀌면 담당 인물은
+해제되고, 확정된 시설만 그날 이용할 수 있게 됩니다. UI는 정산과 전직 처리가 끝난 뒤 이용 가능한 시설을 하나씩 자동으로 엽니다.
+
+상점 가격은 카드 Resource의 `shop_price`입니다. 양수인 장비·소비 카드만 거래 대상으로 삼으며, 판매가는 구매가의 절반(내림)입니다.
+구매 시 `OfficeState.owned_cards`에 추가하고, 판매 시 목록에서 제거합니다. 같은 카드를 중복 보유할 수 없으며 장착 중인 장비는 판매할 수 없습니다.
+
 ## 스킬 데이터 흐름
 
 `data/sql/skill_database.sqlite` → `tools/export_skill_database.py` → `data/skills/skill_database.json` → `ContentCatalog` → 직업 해금 및 인물 스킬 탭

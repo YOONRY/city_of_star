@@ -1,6 +1,8 @@
 extends Control
 
-const NO_ACTIVE_DRAWER := -1
+enum Drawer { CLOSED, CHARACTER_PICKER, EQUIPMENT, CONSUMABLE, SHOP, PERSONNEL }
+
+const NO_FACILITY := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
 const JOB_TRAINING_EVENT_ID := &"job_training"
 const PIXEL_PANEL_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space.png"
@@ -40,10 +42,15 @@ var inventory_drawer: PanelContainer
 var inventory_drawer_title: Label
 var inventory_close_button: Button
 var inventory_card_list: VBoxContainer
-var personnel_button: Button
+var facility_balance_label: Label
+var shop_tabs: TabBar
+var inventory_scroll: ScrollContainer
 var equipment_button: Button
 var consumable_button: Button
-var active_drawer_type: int = NO_ACTIVE_DRAWER
+var active_drawer_type: int = Drawer.CLOSED
+var facility_assignment_target: int = NO_FACILITY
+var facility_candidate_ids: Dictionary = {}
+var facility_open_queue: Array[int] = []
 var selected_event_id: StringName = &""
 var selected_character_card_id: StringName = &""
 var equipment_target_character_id: StringName = &""
@@ -66,6 +73,7 @@ var settlement_results_dismissed: bool = false
 func _ready() -> void:
 	_build_ui()
 	GameState.state_changed.connect(_refresh)
+	GameState.day_advanced.connect(_on_day_advanced)
 	ContentCatalog.catalog_reloaded.connect(_refresh)
 	_refresh()
 
@@ -299,10 +307,6 @@ func _build_ui() -> void:
 	bottom_icon_row.alignment = BoxContainer.ALIGNMENT_END
 	bottom_dock.add_child(bottom_icon_row)
 
-	personnel_button = _make_icon_button("res://assets/icons/person_icon.svg", "Personnel Office")
-	personnel_button.pressed.connect(_on_personnel_pressed)
-	bottom_icon_row.add_child(personnel_button)
-
 	equipment_button = _make_icon_button("res://assets/icons/chest_icon.svg", "Equipment Cards")
 	equipment_button.pressed.connect(_on_equipment_pressed)
 	bottom_icon_row.add_child(equipment_button)
@@ -341,10 +345,21 @@ func _build_ui() -> void:
 	drawer_header.add_child(inventory_drawer_title)
 
 	inventory_close_button = _make_close_button()
-	inventory_close_button.pressed.connect(_close_inventory_drawer)
+	inventory_close_button.pressed.connect(_dismiss_inventory_drawer)
 	drawer_header.add_child(inventory_close_button)
 
-	var inventory_scroll := ScrollContainer.new()
+	facility_balance_label = _make_label("", 14)
+	facility_balance_label.visible = false
+	drawer_box.add_child(facility_balance_label)
+
+	shop_tabs = TabBar.new()
+	shop_tabs.add_tab("구매")
+	shop_tabs.add_tab("판매")
+	shop_tabs.visible = false
+	shop_tabs.tab_changed.connect(_on_shop_tab_changed)
+	drawer_box.add_child(shop_tabs)
+
+	inventory_scroll = ScrollContainer.new()
 	inventory_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	inventory_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	drawer_box.add_child(inventory_scroll)
@@ -780,7 +795,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
 	var is_selected := selected_character_card_id == card.id
 	var assigned_event := _character_event_assignment_label(card)
-	var is_event_selection := not String(request_assignment_target_id).is_empty() or is_selecting_job_training_character
+	var is_event_selection := active_drawer_type == Drawer.CHARACTER_PICKER
 	var is_unavailable_for_event := is_event_selection and not assigned_event.is_empty()
 	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_TEXTURE
 	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
@@ -1259,12 +1274,12 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	summary.add_child(job_label)
 
-	var cost_label := _make_label("Hire cost %s" % GameState.get_hire_cost(card), 12)
+	var cost_label := _make_label("고용 비용 %s" % GameState.get_hire_cost(card), 12)
 	cost_label.add_theme_color_override("font_color", Color("#D7DEE8"))
 	summary.add_child(cost_label)
 
 	var hire_button := Button.new()
-	hire_button.text = "Hire"
+	hire_button.text = "고용"
 	hire_button.disabled = not GameState.can_hire_card(card)
 	_style_pixel_button(hire_button, true)
 	hire_button.pressed.connect(_on_hire_pressed.bind(card.id))
@@ -1280,6 +1295,106 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(skill_label)
 
+	return row
+
+
+func _make_shop_card_row(card: CardDefinition, selling: bool) -> PanelContainer:
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	row.add_child(header)
+
+	var summary := VBoxContainer.new()
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(summary)
+	var name_label := _make_label(card.label(), 15)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.add_child(name_label)
+	var kind := card.equipment_category if card.is_equipment() else "소비 카드"
+	if card.is_equipment() and kind == "미지정":
+		kind = "장비 카드"
+	var equipped := card.is_equipment() and not GameState.get_equipment_owner_id(card.id).is_empty()
+	var detail := "장착 중 · %s" % kind if equipped else kind
+	var detail_label := _make_label("%s · %s" % [detail, _format_stats(card.stats)], 12)
+	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	summary.add_child(detail_label)
+
+	var price := GameState.get_shop_sale_price(card) if selling else card.shop_price
+	var button := Button.new()
+	button.text = "%s %s" % ["판매" if selling else "구매", price]
+	button.custom_minimum_size = Vector2(96, 36)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.disabled = not (GameState.can_sell_shop_card(card) if selling else GameState.can_buy_shop_card(card))
+	if equipped:
+		button.tooltip_text = "장착을 해제한 뒤 판매할 수 있습니다."
+	elif not selling and button.disabled:
+		button.tooltip_text = "자금이 부족합니다."
+	_style_pixel_button(button, true)
+	button.pressed.connect(_on_shop_trade_pressed.bind(card, selling))
+	header.add_child(button)
+	return row
+
+
+func _make_facility_event_row(facility: int) -> PanelContainer:
+	var event_id := _facility_event_id(facility)
+	var title := GameEnums.facility_label(facility)
+	var is_selected := selected_event_id == event_id
+	var character := GameState.get_facility_character(facility)
+	var candidate := ContentCatalog.get_card(facility_candidate_ids.get(facility, &""))
+	var can_open := GameState.is_facility_open(facility)
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", _event_assignment_style(character != null, 14))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	row.add_child(box)
+	box.add_child(_make_event_title_button(title, event_id, is_selected))
+	if not is_selected:
+		return row
+
+	var slot := _make_assignment_slot_button(
+		"내일 담당 인물",
+		character.label() if character != null else (candidate.label() if candidate != null else "미배치"),
+		candidate != null,
+		character != null,
+		_on_facility_character_slot_pressed.bind(facility)
+	)
+	slot.disabled = slot.disabled or GameState.is_game_over or GameState.has_pending_job_change()
+	slot.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	box.add_child(slot)
+
+	if character != null:
+		box.add_child(_make_label("내일 이용 예정", 12))
+
+	if can_open or candidate != null or GameState.can_cancel_facility_assignment(facility):
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 10)
+		box.add_child(actions)
+		if can_open:
+			var open_button := Button.new()
+			open_button.text = "상점 열기" if facility == GameEnums.Facility.SHOP else "고용 목록 열기"
+			_style_pixel_button(open_button, true)
+			open_button.pressed.connect(_on_facility_open_pressed.bind(facility))
+			actions.add_child(open_button)
+
+		if candidate != null and character == null:
+			var confirm_button := Button.new()
+			confirm_button.text = "배치 확정"
+			confirm_button.disabled = not GameState.can_assign_facility(facility, candidate)
+			_style_pixel_button(confirm_button, true)
+			confirm_button.pressed.connect(_on_facility_confirm_pressed.bind(facility))
+			actions.add_child(confirm_button)
+
+		if candidate != null or GameState.can_cancel_facility_assignment(facility):
+			var cancel_button := Button.new()
+			cancel_button.text = "배치 취소"
+			_style_pixel_button(cancel_button, false)
+			cancel_button.pressed.connect(_on_facility_cancel_pressed.bind(facility))
+			actions.add_child(cancel_button)
 	return row
 
 
@@ -1802,6 +1917,7 @@ func _refresh() -> void:
 	_refresh_event_list()
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
+	_show_next_facility()
 
 	if GameState.is_game_over:
 		status_label.text = "Game Over: %s" % GameState.game_over_reason
@@ -2018,35 +2134,43 @@ func _refresh_event_list() -> void:
 
 func _refresh_inventory_drawer() -> void:
 	character_panel.visible = true
+	if (
+		(active_drawer_type == Drawer.SHOP and not GameState.is_facility_open(GameEnums.Facility.SHOP))
+		or (active_drawer_type == Drawer.PERSONNEL and not GameState.is_facility_open(GameEnums.Facility.PERSONNEL))
+	):
+		active_drawer_type = Drawer.CLOSED
 
-	if active_drawer_type == NO_ACTIVE_DRAWER:
-		inventory_drawer.visible = false
-		return
+	inventory_drawer.visible = active_drawer_type != Drawer.CLOSED
+	shop_tabs.visible = active_drawer_type == Drawer.SHOP
+	facility_balance_label.visible = active_drawer_type in [Drawer.SHOP, Drawer.PERSONNEL]
+	if facility_balance_label.visible:
+		facility_balance_label.text = "보유 자금: %s" % GameState.office.money
 
-	inventory_drawer.visible = true
-
-	if active_drawer_type == GameEnums.CardType.CHARACTER:
-		if not String(request_assignment_target_id).is_empty():
+	if active_drawer_type == Drawer.CHARACTER_PICKER:
+		if facility_assignment_target != NO_FACILITY:
+			inventory_drawer_title.text = "%s 담당 인물 선택" % GameEnums.facility_label(facility_assignment_target)
+		elif not String(request_assignment_target_id).is_empty():
 			inventory_drawer_title.text = "의뢰 담당 인물 선택"
-			_populate_job_training_candidate_list()
-		elif is_selecting_job_training_character:
-			inventory_drawer_title.text = "직업 교육 대상 선택"
-			_populate_job_training_candidate_list()
 		else:
-			inventory_drawer_title.text = "Personnel Office"
-			_populate_hire_candidate_list()
-	elif active_drawer_type == GameEnums.CardType.EQUIPMENT:
+			inventory_drawer_title.text = "직업 교육 대상 선택"
+		_populate_assignment_candidate_list()
+	elif active_drawer_type == Drawer.PERSONNEL:
+		inventory_drawer_title.text = GameEnums.facility_label(GameEnums.Facility.PERSONNEL)
+		_populate_hire_candidate_list()
+	elif active_drawer_type == Drawer.SHOP:
+		inventory_drawer_title.text = GameEnums.facility_label(GameEnums.Facility.SHOP)
+		_populate_shop_card_list()
+	elif active_drawer_type == Drawer.EQUIPMENT:
 		inventory_drawer_title.text = _equipment_drawer_title()
 		_populate_equipment_card_list()
-	elif active_drawer_type == GameEnums.CardType.CONSUMABLE:
+	elif active_drawer_type == Drawer.CONSUMABLE:
 		inventory_drawer_title.text = "Consumable Cards"
 		_populate_consumable_card_list()
 
 
 func _refresh_inventory_buttons() -> void:
-	personnel_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.CHARACTER else Color.WHITE
-	equipment_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.EQUIPMENT else Color.WHITE
-	consumable_button.modulate = Color("#F4C95D") if active_drawer_type == GameEnums.CardType.CONSUMABLE else Color.WHITE
+	equipment_button.modulate = Color("#F4C95D") if active_drawer_type == Drawer.EQUIPMENT else Color.WHITE
+	consumable_button.modulate = Color("#F4C95D") if active_drawer_type == Drawer.CONSUMABLE else Color.WHITE
 
 
 func _populate_card_list(container: VBoxContainer, cards: Array[CardDefinition], empty_text: String) -> void:
@@ -2065,12 +2189,12 @@ func _populate_event_list(requests: Array) -> void:
 	event_list.add_child(_make_tax_payment_event_row())
 	event_list.add_child(_make_job_training_event_row())
 
-	if requests.is_empty():
-		return
-
 	for request in requests:
 		if request is RequestDefinition:
 			event_list.add_child(_make_event_row(request))
+
+	event_list.add_child(_make_facility_event_row(GameEnums.Facility.SHOP))
+	event_list.add_child(_make_facility_event_row(GameEnums.Facility.PERSONNEL))
 
 
 func _populate_hire_candidate_list() -> void:
@@ -2078,14 +2202,26 @@ func _populate_hire_candidate_list() -> void:
 	var candidates := _get_hire_candidates()
 
 	if candidates.is_empty():
-		inventory_card_list.add_child(_make_empty_label("No available personnel."))
+		inventory_card_list.add_child(_make_empty_label("오늘은 고용할 수 있는 인물이 없습니다."))
 		return
 
 	for card in candidates:
 		inventory_card_list.add_child(_make_hire_candidate_row(card))
 
 
-func _populate_job_training_candidate_list() -> void:
+func _populate_shop_card_list() -> void:
+	_clear_children(inventory_card_list)
+	var selling := shop_tabs.current_tab == 1
+	var cards := GameState.get_shop_cards(selling)
+	cards.sort_custom(Callable(self, "_sort_cards_by_label"))
+	if cards.is_empty():
+		inventory_card_list.add_child(_make_empty_label("판매할 카드가 없습니다." if selling else "구매할 카드가 없습니다."))
+		return
+	for card in cards:
+		inventory_card_list.add_child(_make_shop_card_row(card, selling))
+
+
+func _populate_assignment_candidate_list() -> void:
 	_clear_children(inventory_card_list)
 	var characters := _get_cards_by_type(GameEnums.CardType.CHARACTER)
 	if characters.is_empty():
@@ -2178,6 +2314,10 @@ func _request_event_id(request: RequestDefinition) -> StringName:
 	return StringName("request:%s" % raw_id)
 
 
+func _facility_event_id(facility: int) -> StringName:
+	return StringName("facility:%s" % facility)
+
+
 func _clear_children(container: Node) -> void:
 	for child in container.get_children():
 		container.remove_child(child)
@@ -2211,6 +2351,9 @@ func _character_event_assignment_label(card: CardDefinition) -> String:
 		return "직업 교육소 (배치 대기)"
 
 	if card != null:
+		for facility in facility_candidate_ids:
+			if facility_candidate_ids[facility] == card.id:
+				return "%s (배치 대기)" % GameEnums.facility_label(facility)
 		for raw_request_id in daily_request_character_ids:
 			if StringName(daily_request_character_ids[raw_request_id]) != card.id:
 				continue
@@ -2379,17 +2522,17 @@ func _event_rewards(request: RequestDefinition) -> String:
 
 
 func _on_next_day_pressed() -> void:
-	var previous_day := GameState.current_day
-	GameState.advance_day()
-	if GameState.current_day == previous_day:
-		return
+	if not next_day_button.disabled:
+		GameState.advance_day()
 
+
+func _on_day_advanced(_day: int) -> void:
 	daily_request_character_ids.clear()
-	request_assignment_target_id = &""
+	facility_candidate_ids.clear()
+	facility_open_queue = GameState.available_facilities.duplicate()
 	settlement_results_dismissed = false
 	selected_event_id = &""
 	_close_inventory_drawer()
-	_refresh()
 
 
 func _on_event_title_pressed(event_id: StringName) -> void:
@@ -2427,38 +2570,34 @@ func _on_reset_pressed() -> void:
 	is_selecting_job_training_character = false
 	job_training_candidate_character_id = &""
 	daily_request_character_ids.clear()
+	facility_candidate_ids.clear()
+	facility_open_queue.clear()
 	request_assignment_target_id = &""
 	settlement_results_dismissed = false
 	_reset_player_creation_form()
+	_close_inventory_drawer()
 	GameState.reset_game()
-
-
-func _on_personnel_pressed() -> void:
-	equipment_target_character_id = &""
-	is_selecting_tax_event_money = false
-	is_selecting_job_training_character = false
-	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
 
 
 func _on_equipment_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	is_selecting_job_training_character = false
-	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
+	_open_inventory_drawer(Drawer.EQUIPMENT)
 
 
 func _on_consumable_pressed() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	is_selecting_job_training_character = false
-	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+	_open_inventory_drawer(Drawer.CONSUMABLE)
 
 
 func _on_equipment_slot_pressed(character_id: StringName) -> void:
 	equipment_target_character_id = character_id
 	selected_character_card_id = character_id
 	is_selecting_tax_event_money = false
-	_open_inventory_drawer(GameEnums.CardType.EQUIPMENT)
+	_open_inventory_drawer(Drawer.EQUIPMENT)
 
 
 func _on_level_up_pressed(character_id: StringName) -> void:
@@ -2513,7 +2652,72 @@ func _on_tax_consumable_slot_pressed() -> void:
 
 	selected_event_id = TAX_PAYMENT_EVENT_ID
 	is_selecting_tax_event_money = true
-	_open_inventory_drawer(GameEnums.CardType.CONSUMABLE)
+	_open_inventory_drawer(Drawer.CONSUMABLE)
+
+
+func _on_facility_character_slot_pressed(facility: int) -> void:
+	if GameState.is_game_over or GameState.has_pending_job_change() or GameState.get_facility_character(facility) != null:
+		return
+
+	_close_inventory_drawer()
+	selected_event_id = _facility_event_id(facility)
+	selected_character_card_id = &""
+	_refresh_character_detail_popup()
+	facility_assignment_target = facility
+	_open_inventory_drawer(Drawer.CHARACTER_PICKER)
+
+
+func _on_facility_confirm_pressed(facility: int) -> void:
+	var character := ContentCatalog.get_card(facility_candidate_ids.get(facility, &""))
+	if not GameState.can_assign_facility(facility, character):
+		return
+
+	facility_candidate_ids.erase(facility)
+	GameState.assign_facility(facility, character)
+
+
+func _on_facility_cancel_pressed(facility: int) -> void:
+	if facility_candidate_ids.erase(facility):
+		_refresh()
+	else:
+		GameState.cancel_facility_assignment(facility)
+
+
+func _show_next_facility() -> void:
+	if active_drawer_type != Drawer.CLOSED or GameState.has_pending_job_change() or settlement_popup.visible:
+		return
+
+	while not facility_open_queue.is_empty():
+		var facility: int = facility_open_queue.pop_front()
+		if GameState.is_facility_open(facility):
+			_on_facility_open_pressed(facility)
+			return
+
+
+func _on_facility_open_pressed(facility: int) -> void:
+	if not GameState.is_facility_open(facility):
+		return
+
+	_close_inventory_drawer()
+	if facility == GameEnums.Facility.SHOP:
+		shop_tabs.current_tab = 0
+		_open_inventory_drawer(Drawer.SHOP)
+	else:
+		_open_inventory_drawer(Drawer.PERSONNEL)
+	inventory_scroll.scroll_vertical = 0
+
+
+func _on_shop_tab_changed(_tab: int) -> void:
+	if active_drawer_type == Drawer.SHOP:
+		_populate_shop_card_list()
+		inventory_scroll.scroll_vertical = 0
+
+
+func _on_shop_trade_pressed(card: CardDefinition, selling: bool) -> void:
+	if selling:
+		GameState.sell_shop_card(card)
+	else:
+		GameState.buy_shop_card(card)
 
 
 func _on_daily_request_character_slot_pressed(request_id: StringName) -> void:
@@ -2521,6 +2725,7 @@ func _on_daily_request_character_slot_pressed(request_id: StringName) -> void:
 	if request == null or not GameState.office.available_requests.has(request) or GameState.get_daily_request_assigned_character(request) != null:
 		return
 
+	_close_inventory_drawer()
 	selected_event_id = _request_event_id(request)
 	selected_character_card_id = &""
 	_refresh_character_detail_popup()
@@ -2528,7 +2733,7 @@ func _on_daily_request_character_slot_pressed(request_id: StringName) -> void:
 	is_selecting_job_training_character = false
 	is_selecting_tax_event_money = false
 	equipment_target_character_id = &""
-	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
+	_open_inventory_drawer(Drawer.CHARACTER_PICKER)
 
 
 func _on_daily_request_execute_pressed(request_id: StringName) -> void:
@@ -2600,13 +2805,14 @@ func _on_tax_event_cancel_pressed() -> void:
 
 
 func _on_job_training_character_slot_pressed() -> void:
+	_close_inventory_drawer()
 	selected_event_id = JOB_TRAINING_EVENT_ID
 	selected_character_card_id = &""
 	_refresh_character_detail_popup()
 	is_selecting_job_training_character = true
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
-	_open_inventory_drawer(GameEnums.CardType.CHARACTER)
+	_open_inventory_drawer(Drawer.CHARACTER_PICKER)
 
 
 func _on_job_training_cancel_pressed() -> void:
@@ -2640,15 +2846,20 @@ func _on_training_job_selected(job_id: StringName) -> void:
 		_refresh()
 
 
-func _open_inventory_drawer(card_type: int) -> void:
-	active_drawer_type = card_type
+func _open_inventory_drawer(drawer_type: int) -> void:
+	active_drawer_type = drawer_type
+	if drawer_type != Drawer.CHARACTER_PICKER:
+		facility_assignment_target = NO_FACILITY
+		request_assignment_target_id = &""
+		is_selecting_job_training_character = false
 
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
 
 
 func _close_inventory_drawer() -> void:
-	active_drawer_type = NO_ACTIVE_DRAWER
+	active_drawer_type = Drawer.CLOSED
+	facility_assignment_target = NO_FACILITY
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	is_selecting_job_training_character = false
@@ -2657,8 +2868,13 @@ func _close_inventory_drawer() -> void:
 	_refresh_inventory_buttons()
 
 
+func _dismiss_inventory_drawer() -> void:
+	_close_inventory_drawer()
+	_show_next_facility()
+
+
 func _input(event: InputEvent) -> void:
-	if active_drawer_type == NO_ACTIVE_DRAWER:
+	if active_drawer_type == Drawer.CLOSED:
 		return
 
 	if event is InputEventMouseButton:
@@ -2669,7 +2885,7 @@ func _input(event: InputEvent) -> void:
 		if _is_inventory_drawer_click(mouse_event.position):
 			return
 
-		_close_inventory_drawer()
+		_dismiss_inventory_drawer()
 		get_viewport().set_input_as_handled()
 
 
@@ -2677,7 +2893,6 @@ func _is_inventory_drawer_click(position: Vector2) -> bool:
 	return (
 		_is_point_in_control(inventory_drawer, position)
 		or _is_point_in_control(character_detail_popup, position)
-		or _is_point_in_control(personnel_button, position)
 		or _is_point_in_control(equipment_button, position)
 		or _is_point_in_control(consumable_button, position)
 		or _is_point_in_control(next_day_button, position)
@@ -2692,6 +2907,15 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			if facility_assignment_target != NO_FACILITY:
+				var facility := facility_assignment_target
+				var character := ContentCatalog.get_card(card_id)
+				if _character_event_assignment_label(character).is_empty() and GameState.can_assign_facility(facility, character):
+					facility_candidate_ids[facility] = card_id
+					_close_inventory_drawer()
+					_refresh()
+				return
+
 			if not String(request_assignment_target_id).is_empty():
 				var request_id := request_assignment_target_id
 				var request := ContentCatalog.get_request(request_id)

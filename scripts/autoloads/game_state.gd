@@ -49,6 +49,8 @@ var recruit_rng := RandomNumberGenerator.new()
 var player_character_id: StringName = &""
 var daily_request_assignments: Dictionary = {}
 var last_daily_request_results: Array[Dictionary] = []
+var facility_assignments: Dictionary = {}
+var available_facilities: Array[int] = []
 
 func _ready() -> void:
 	recruit_rng.randomize()
@@ -77,6 +79,8 @@ func reset_game() -> void:
 	player_character_id = &""
 	daily_request_assignments.clear()
 	last_daily_request_results.clear()
+	facility_assignments.clear()
+	available_facilities.clear()
 	_refresh_hire_candidates()
 	_refresh_daily_requests()
 	_clear_last_tax_payment()
@@ -93,6 +97,8 @@ func advance_day() -> void:
 
 	_settle_queued_daily_requests()
 	current_day += 1
+	available_facilities.assign(facility_assignments.keys())
+	facility_assignments.clear()
 	_refresh_hire_candidates()
 	_refresh_daily_requests()
 
@@ -178,8 +184,111 @@ func cancel_current_week_tax_payment() -> bool:
 	return true
 
 
+func can_assign_facility(facility: int, character: CardDefinition) -> bool:
+	return (
+		not is_game_over
+		and not has_pending_job_change()
+		and not GameEnums.facility_label(facility).is_empty()
+		and not facility_assignments.has(facility)
+		and character != null
+		and character.is_character()
+		and office.owned_cards.has(character)
+		and get_character_event_assignment(character).is_empty()
+	)
+
+
+func assign_facility(facility: int, character: CardDefinition) -> bool:
+	if not can_assign_facility(facility, character):
+		return false
+
+	facility_assignments[facility] = character.id
+	state_changed.emit()
+	return true
+
+
+func get_facility_character(facility: int) -> CardDefinition:
+	var character := ContentCatalog.get_card(facility_assignments.get(facility, &""))
+	return character if office.owned_cards.has(character) else null
+
+
+func is_facility_open(facility: int) -> bool:
+	return not is_game_over and not has_pending_job_change() and available_facilities.has(facility)
+
+
+func can_cancel_facility_assignment(facility: int) -> bool:
+	return not is_game_over and facility_assignments.has(facility)
+
+
+func cancel_facility_assignment(facility: int) -> bool:
+	if not can_cancel_facility_assignment(facility):
+		return false
+
+	facility_assignments.erase(facility)
+	state_changed.emit()
+	return true
+
+
+func _is_shop_item(card: CardDefinition) -> bool:
+	return card != null and (card.is_equipment() or card.is_consumable()) and card.shop_price > 0
+
+
+func get_shop_cards(selling: bool) -> Array[CardDefinition]:
+	var cards: Array[CardDefinition] = []
+	if not is_facility_open(GameEnums.Facility.SHOP):
+		return cards
+
+	var source := office.owned_cards if selling else ContentCatalog.cards
+	for card in source:
+		if _is_shop_item(card) and (selling or not office.owned_cards.has(card)):
+			cards.append(card)
+	return cards
+
+
+func get_shop_sale_price(card: CardDefinition) -> int:
+	return floori(card.shop_price * 0.5) if _is_shop_item(card) else 0
+
+
+func can_buy_shop_card(card: CardDefinition) -> bool:
+	return (
+		is_facility_open(GameEnums.Facility.SHOP)
+		and _is_shop_item(card)
+		and ContentCatalog.get_card(card.id) == card
+		and not office.owned_cards.has(card)
+		and office.money >= card.shop_price
+	)
+
+
+func buy_shop_card(card: CardDefinition) -> bool:
+	if not can_buy_shop_card(card):
+		return false
+
+	office.money -= card.shop_price
+	office.add_card(card)
+	state_changed.emit()
+	return true
+
+
+func can_sell_shop_card(card: CardDefinition) -> bool:
+	return (
+		is_facility_open(GameEnums.Facility.SHOP)
+		and get_shop_sale_price(card) > 0
+		and office.owned_cards.has(card)
+		and (not card.is_equipment() or get_equipment_owner_id(card.id).is_empty())
+	)
+
+
+func sell_shop_card(card: CardDefinition) -> bool:
+	if not can_sell_shop_card(card):
+		return false
+
+	office.owned_cards.erase(card)
+	office.money += get_shop_sale_price(card)
+	state_changed.emit()
+	return true
+
+
 func can_hire_card(card: CardDefinition) -> bool:
-	if is_game_over or card == null or not card.is_character():
+	if not is_facility_open(GameEnums.Facility.PERSONNEL) or card == null or not card.is_character():
 		return false
 
 	if office.owned_cards.has(card):
@@ -202,6 +311,8 @@ func hire_card(card: CardDefinition) -> bool:
 
 
 func get_hire_candidates() -> Array[CardDefinition]:
+	if not is_facility_open(GameEnums.Facility.PERSONNEL):
+		return []
 	return hire_candidates.duplicate()
 
 
@@ -255,6 +366,10 @@ func get_character_event_assignment(character: CardDefinition) -> String:
 
 	if job_training_character_id == character.id or pending_job_change_character_id == character.id:
 		return "직업 교육소"
+
+	for facility in facility_assignments:
+		if facility_assignments[facility] == character.id:
+			return GameEnums.facility_label(facility)
 
 	for raw_request_id in daily_request_assignments:
 		if StringName(daily_request_assignments[raw_request_id]) != character.id:

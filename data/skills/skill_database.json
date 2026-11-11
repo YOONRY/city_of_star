@@ -851,6 +851,68 @@
       "target_text": "적 1,2열 1체",
       "main_stat": "민첩 0.9",
       "damage_type": 1
+    },
+    {
+      "id": 52,
+      "display_name": "위치전환",
+      "skill_type_id": 1,
+      "ap_cost": 1,
+      "effect_text": "아군 2명의 위치를 바꾼다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "아군 2체",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 53,
+      "display_name": "호흡 맞추기",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "아군 1명의 위치를 1칸 변경하고 AP를 +1한다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "아군 1체",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 54,
+      "display_name": "연계",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "이번턴 위치가 바뀐 아군 하나당 주는 피해가 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 55,
+      "display_name": "호신비수",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "적 1체에게 피해를 130% 주고 2칸 밀친다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "적 1,2열 1체",
+      "main_stat": "민첩 1.0",
+      "damage_type": 1
     }
   ],
   "jobs": [
@@ -1134,6 +1196,26 @@
       "job_id": "Trickster",
       "skill_id": 51,
       "unlock_level": 1
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 52,
+      "unlock_level": 2
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 53,
+      "unlock_level": 3
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 54,
+      "unlock_level": 4
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 55,
+      "unlock_level": 5
     }
   ]
 }

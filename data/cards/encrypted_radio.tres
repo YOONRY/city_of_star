@@ -16,6 +16,7 @@ script = ExtResource("1_card")
 id = &"encrypted_radio"
 display_name = "Encrypted Radio"
 card_type = 1
+shop_price = 26
 stats = SubResource("Resource_stats")
 skill_ids = PackedStringArray("signal_scan")
 weekly_wage = 0

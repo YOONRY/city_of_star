@@ -13,6 +13,11 @@ enum RequestType {
 	EVENT,
 }
 
+enum Facility {
+	SHOP,
+	PERSONNEL,
+}
+
 enum Stat {
 	STRENGTH,
 	AGILITY,
@@ -39,3 +44,12 @@ static func card_type_label(value: int) -> String:
 
 static func request_type_label(value: int) -> String:
 	return REQUEST_TYPE_LABELS.get(value, "Unknown")
+
+
+static func facility_label(value: int) -> String:
+	match value:
+		Facility.SHOP:
+			return "상점"
+		Facility.PERSONNEL:
+			return "인력 사무소"
+	return ""

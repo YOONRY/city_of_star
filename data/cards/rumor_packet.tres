@@ -16,6 +16,7 @@ script = ExtResource("1_card")
 id = &"rumor_packet"
 display_name = "Rumor Packet"
 card_type = 2
+shop_price = 16
 stats = SubResource("Resource_stats")
 skill_ids = PackedStringArray("lead")
 weekly_wage = 0

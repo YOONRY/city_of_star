@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/cards/card_definition.gd" id="1_card"]
+[ext_resource type="Script" path="res://scripts/core/stat_block.gd" id="2_stats"]
+
+[sub_resource type="Resource" id="Resource_stats"]
+script = ExtResource("2_stats")
+health = 3
+
+[resource]
+script = ExtResource("1_card")
+id = &"travel_rations"
+display_name = "휴대 식량"
+card_type = 2
+shop_price = 10
+stats = SubResource("Resource_stats")
+tags = PackedStringArray("consumable")

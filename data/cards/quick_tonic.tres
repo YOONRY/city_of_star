@@ -16,6 +16,7 @@ script = ExtResource("1_card")
 id = &"quick_tonic"
 display_name = "Quick Tonic"
 card_type = 2
+shop_price = 12
 stats = SubResource("Resource_stats")
 skill_ids = PackedStringArray()
 weekly_wage = 0

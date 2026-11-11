@@ -9,6 +9,7 @@ class_name CardDefinition
 @export var skill_ids: PackedStringArray = []
 @export_enum("미지정", "근접무기", "사격무기", "마법장비") var equipment_category: String = "미지정"
 @export var weekly_wage: int = 0
+@export_range(0, 9999, 1, "or_greater") var shop_price: int = 0
 @export var species: StringName
 @export var job: StringName
 @export var tags: PackedStringArray = []
