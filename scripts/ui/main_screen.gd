@@ -14,7 +14,12 @@ const PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_u
 const PIXEL_PANEL_GREY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/grey.png"
 const WINDOW_BACKGROUND_COLOR := Color("#121B24")
 const WINDOW_BORDER_COLOR := Color("#2F4659")
+const NOTICE_INK := Color("#2E2A24")
+const NOTICE_MUTED_INK := Color("#554D40")
+const NOTICE_ACTIVE_INK := Color("#245951")
+const NoticeBoardArt := preload("res://scripts/ui/notice_board_art.gd")
 
+var notice_board_art := NoticeBoardArt.new()
 var day_value: Label
 var status_label: Label
 var event_list: VBoxContainer
@@ -126,7 +131,9 @@ func _build_ui() -> void:
 	event_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(event_stage)
 
-	var event_panel := _make_panel()
+	var event_panel := PanelContainer.new()
+	event_panel.add_theme_stylebox_override("panel", notice_board_art.board)
+	event_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	event_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	event_stage.add_child(event_panel)
 
@@ -134,9 +141,12 @@ func _build_ui() -> void:
 	event_box.add_theme_constant_override("separation", 14)
 	event_panel.add_child(event_box)
 
-	event_box.add_child(_make_section_title("Events"))
+	var board_title := _make_label("의뢰 게시판", 23)
+	board_title.add_theme_color_override("font_color", Color("#F6EBD6"))
+	event_box.add_child(board_title)
 
 	status_label = _make_label("", 13)
+	status_label.add_theme_color_override("font_color", Color("#EDE1D1"))
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	event_box.add_child(status_label)
 
@@ -146,7 +156,7 @@ func _build_ui() -> void:
 	event_box.add_child(event_scroll)
 
 	event_list = VBoxContainer.new()
-	event_list.add_theme_constant_override("separation", 10)
+	event_list.add_theme_constant_override("separation", 9)
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
 
@@ -1343,16 +1353,12 @@ func _make_facility_event_row(facility: int) -> PanelContainer:
 	var character := GameState.get_facility_character(facility)
 	var candidate := ContentCatalog.get_card(facility_candidate_ids.get(facility, &""))
 	var can_open := GameState.is_facility_open(facility)
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _event_assignment_style(character != null, 14))
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+	var row := _make_notice_panel(event_id, character != null)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
-	box.add_child(_make_event_title_button(title, event_id, is_selected))
+	box.add_child(_make_event_title_button(title, event_id, is_selected, character != null))
 	if not is_selected:
 		return row
 
@@ -1368,7 +1374,9 @@ func _make_facility_event_row(facility: int) -> PanelContainer:
 	box.add_child(slot)
 
 	if character != null:
-		box.add_child(_make_label("내일 이용 예정", 12))
+		var scheduled := _make_label("내일 이용 예정", 12)
+		scheduled.add_theme_color_override("font_color", NOTICE_ACTIVE_INK)
+		box.add_child(scheduled)
 
 	if can_open or candidate != null or GameState.can_cancel_facility_assignment(facility):
 		var actions := HBoxContainer.new()
@@ -1377,7 +1385,7 @@ func _make_facility_event_row(facility: int) -> PanelContainer:
 		if can_open:
 			var open_button := Button.new()
 			open_button.text = "상점 열기" if facility == GameEnums.Facility.SHOP else "고용 목록 열기"
-			_style_pixel_button(open_button, true)
+			_style_notice_button(open_button, true)
 			open_button.pressed.connect(_on_facility_open_pressed.bind(facility))
 			actions.add_child(open_button)
 
@@ -1385,14 +1393,14 @@ func _make_facility_event_row(facility: int) -> PanelContainer:
 			var confirm_button := Button.new()
 			confirm_button.text = "배치 확정"
 			confirm_button.disabled = not GameState.can_assign_facility(facility, candidate)
-			_style_pixel_button(confirm_button, true)
+			_style_notice_button(confirm_button, true)
 			confirm_button.pressed.connect(_on_facility_confirm_pressed.bind(facility))
 			actions.add_child(confirm_button)
 
 		if candidate != null or GameState.can_cancel_facility_assignment(facility):
 			var cancel_button := Button.new()
 			cancel_button.text = "배치 취소"
-			_style_pixel_button(cancel_button, false)
+			_style_notice_button(cancel_button, false)
 			cancel_button.pressed.connect(_on_facility_cancel_pressed.bind(facility))
 			actions.add_child(cancel_button)
 	return row
@@ -1402,17 +1410,13 @@ func _make_event_row(request: RequestDefinition) -> PanelContainer:
 	var event_id := _request_event_id(request)
 	var is_selected := selected_event_id == event_id
 	var is_assignment_complete := GameState.get_daily_request_assigned_character(request) != null
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _event_assignment_style(is_assignment_complete, 14))
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+	var row := _make_notice_panel(event_id, is_assignment_complete)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
 
-	box.add_child(_make_event_title_button(_request_display_title(request), event_id, is_selected))
+	box.add_child(_make_event_title_button(_request_display_title(request), event_id, is_selected, is_assignment_complete))
 
 	if is_selected:
 		box.add_child(_make_request_event_detail(request))
@@ -1424,22 +1428,13 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
 	var can_resolve := _can_resolve_tax_event()
 	var is_selected := selected_event_id == TAX_PAYMENT_EVENT_ID
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _event_assignment_style(is_paid, 14))
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.gui_input.connect(_on_event_row_gui_input.bind(TAX_PAYMENT_EVENT_ID))
+	var row := _make_notice_panel(TAX_PAYMENT_EVENT_ID, is_paid)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
 
-	var title_button := _make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected)
-	if is_paid:
-		title_button.add_theme_color_override("font_color", Color("#B7F6C7"))
-		title_button.add_theme_color_override("font_hover_color", Color("#D8FFE1"))
-		title_button.add_theme_color_override("font_pressed_color", Color("#8DDEAA"))
-	box.add_child(title_button)
+	box.add_child(_make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected, is_paid))
 
 	if not is_selected:
 		return row
@@ -1453,7 +1448,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	header.add_child(title_box)
 
 	var meta_label := _make_label(_tax_event_meta(), 12)
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.add_theme_color_override("font_color", NOTICE_MUTED_INK)
 	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_box.add_child(meta_label)
 
@@ -1462,7 +1457,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	resolve_button.disabled = not can_resolve
 	resolve_button.custom_minimum_size = Vector2(88, 34)
 	resolve_button.focus_mode = Control.FOCUS_NONE
-	_style_pixel_button(resolve_button, true)
+	_style_notice_button(resolve_button, true)
 	resolve_button.pressed.connect(_on_tax_event_resolve_pressed)
 	header.add_child(resolve_button)
 
@@ -1471,7 +1466,7 @@ func _make_tax_payment_event_row() -> PanelContainer:
 		cancel_button.text = "취소"
 		cancel_button.custom_minimum_size = Vector2(72, 34)
 		cancel_button.focus_mode = Control.FOCUS_NONE
-		_style_pixel_button(cancel_button, false)
+		_style_notice_button(cancel_button, false)
 		cancel_button.pressed.connect(_on_tax_event_cancel_pressed)
 		header.add_child(cancel_button)
 
@@ -1502,16 +1497,12 @@ func _make_job_training_event_row() -> PanelContainer:
 	var candidate_character := ContentCatalog.get_card(job_training_candidate_character_id)
 	var has_pending_change := GameState.has_pending_job_change()
 	var is_assignment_complete := assigned_character != null or has_pending_change
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _event_assignment_style(is_assignment_complete, 14))
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.gui_input.connect(_on_event_row_gui_input.bind(JOB_TRAINING_EVENT_ID))
+	var row := _make_notice_panel(JOB_TRAINING_EVENT_ID, is_assignment_complete)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	row.add_child(box)
-	box.add_child(_make_event_title_button("직업 교육소", JOB_TRAINING_EVENT_ID, is_selected))
+	box.add_child(_make_event_title_button("직업 교육소", JOB_TRAINING_EVENT_ID, is_selected, is_assignment_complete))
 
 	if not is_selected:
 		return row
@@ -1522,7 +1513,7 @@ func _make_job_training_event_row() -> PanelContainer:
 
 	var meta_label := _make_label("Event / 1 day / 캐릭터 카드 1장 필요", 12)
 	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.add_theme_color_override("font_color", NOTICE_MUTED_INK)
 	header.add_child(meta_label)
 
 	var execute_button := Button.new()
@@ -1530,7 +1521,7 @@ func _make_job_training_event_row() -> PanelContainer:
 	execute_button.custom_minimum_size = Vector2(88, 34)
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.disabled = candidate_character == null or assigned_character != null or has_pending_change
-	_style_pixel_button(execute_button, true)
+	_style_notice_button(execute_button, true)
 	execute_button.pressed.connect(_on_job_training_execute_pressed)
 	header.add_child(execute_button)
 
@@ -1558,7 +1549,7 @@ func _make_job_training_event_row() -> PanelContainer:
 		var cancel_button := Button.new()
 		cancel_button.text = "배치 취소"
 		cancel_button.focus_mode = Control.FOCUS_NONE
-		_style_pixel_button(cancel_button, false)
+		_style_notice_button(cancel_button, false)
 		cancel_button.pressed.connect(_on_job_training_cancel_pressed)
 		box.add_child(cancel_button)
 
@@ -1573,7 +1564,7 @@ func _make_job_training_event_row() -> PanelContainer:
 		status_text = "캐릭터 목록에서 교육할 인물을 선택하세요."
 
 	var status := _make_label(status_text, 12)
-	status.add_theme_color_override("font_color", Color("#F4C95D") if candidate_character != null or assigned_character != null or has_pending_change else Color("#AAB6C2"))
+	status.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if candidate_character != null or is_assignment_complete else NOTICE_MUTED_INK)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status)
 	return row
@@ -1594,7 +1585,7 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 
 	var meta_label := _make_label(_event_meta(request), 12)
 	meta_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	meta_label.add_theme_color_override("font_color", NOTICE_MUTED_INK)
 	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header.add_child(meta_label)
 
@@ -1603,12 +1594,13 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	execute_button.custom_minimum_size = Vector2(88, 34)
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.disabled = is_queued or not GameState.can_queue_daily_request(request, assigned_character)
-	_style_pixel_button(execute_button, true)
+	_style_notice_button(execute_button, true)
 	execute_button.pressed.connect(_on_daily_request_execute_pressed.bind(request.id))
 	header.add_child(execute_button)
 
 	var reward_label := _make_label(_event_rewards(request), 12)
-	reward_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	reward_label.add_theme_color_override("font_color", NOTICE_INK)
+	reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.add_child(reward_label)
 
 	var slot_row := HBoxContainer.new()
@@ -1628,7 +1620,7 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 		var cancel_button := Button.new()
 		cancel_button.text = "배치 해제"
 		cancel_button.focus_mode = Control.FOCUS_NONE
-		_style_pixel_button(cancel_button, false)
+		_style_notice_button(cancel_button, false)
 		cancel_button.pressed.connect(_on_daily_request_cancel_pressed.bind(request.id))
 		detail.add_child(cancel_button)
 
@@ -1638,27 +1630,47 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	elif assigned_character != null:
 		status_text = "%s 임시 배치. 실행하면 오늘의 의뢰로 확정됩니다." % assigned_character.label()
 	var status_label := _make_label(status_text, 12)
-	status_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	status_label.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if assigned_character != null else NOTICE_MUTED_INK)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.add_child(status_label)
 
 	return detail
 
 
-func _make_event_title_button(title: String, event_id: StringName, is_selected: bool) -> Button:
+func _make_notice_panel(event_id: StringName, is_complete: bool) -> PanelContainer:
+	var panel := PanelContainer.new()
+	var style := notice_board_art.note
+	if is_complete:
+		style = notice_board_art.completed_note
+	elif selected_event_id == event_id:
+		style = notice_board_art.selected_note
+	panel.add_theme_stylebox_override("panel", style)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+	return panel
+
+
+func _make_event_title_button(title: String, event_id: StringName, is_selected: bool, is_complete: bool) -> Button:
 	var button := Button.new()
 	button.text = title
+	button.icon = notice_board_art.pin
+	if is_complete:
+		button.icon = notice_board_art.completed_pin
+	elif is_selected:
+		button.icon = notice_board_art.selected_pin
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.custom_minimum_size = Vector2(0, 38)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	button.focus_mode = Control.FOCUS_NONE
-	button.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
-	button.add_theme_font_size_override("font_size", 15)
+	button.tooltip_text = title
+	button.add_theme_constant_override("h_separation", 10)
+	button.add_theme_font_size_override("font_size", 16)
 	_style_clear_button(button)
-	if is_selected:
-		button.add_theme_color_override("font_color", Color("#F4C95D"))
-		button.add_theme_color_override("font_hover_color", Color("#F4C95D"))
-		button.add_theme_color_override("font_pressed_color", Color("#D6A64F"))
+	button.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if is_selected or is_complete else NOTICE_INK)
+	button.add_theme_color_override("font_hover_color", NOTICE_ACTIVE_INK)
+	button.add_theme_color_override("font_pressed_color", NOTICE_ACTIVE_INK)
 	button.pressed.connect(_on_event_title_pressed.bind(event_id))
 	return button
 
@@ -1670,7 +1682,7 @@ func _make_event_slot_button(title: String, detail: String, disabled: bool, call
 	button.custom_minimum_size = Vector2(0, 72)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.focus_mode = Control.FOCUS_NONE
-	_style_pixel_button(button, not disabled)
+	_style_notice_button(button, not disabled)
 
 	if not disabled and callback.is_valid():
 		button.pressed.connect(callback)
@@ -1687,60 +1699,49 @@ func _make_assignment_slot_button(title: String, detail: String, has_candidate: 
 	button.focus_mode = Control.FOCUS_NONE
 
 	if is_queued:
-		_style_confirmed_request_slot(button)
+		_style_notice_slot(button, Color("#B6C8B1"), Color("#637E63"), NOTICE_ACTIVE_INK)
 	elif has_candidate:
-		_style_pixel_button(button, false)
-		button.add_theme_color_override("font_color", Color("#E9F6FF"))
-		button.add_theme_color_override("font_hover_color", Color.WHITE)
+		_style_notice_slot(button, Color("#CBD6CD"), Color("#688077"), NOTICE_ACTIVE_INK)
 	else:
-		_style_empty_request_slot(button)
+		_style_notice_slot(button, Color("#E6DDCB"), Color("#A39783"), NOTICE_MUTED_INK)
 
 	if not is_queued and callback.is_valid():
 		button.pressed.connect(callback)
 	return button
 
 
-func _style_empty_request_slot(button: Button) -> void:
-	button.add_theme_stylebox_override("normal", _make_pixel_style(PIXEL_PANEL_GREY_TEXTURE, 8, 8))
-	button.add_theme_stylebox_override("hover", _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, 8))
-	button.add_theme_stylebox_override("pressed", _make_pixel_style(PIXEL_BUTTON_PRESSED_TEXTURE, 8, 8))
-	button.add_theme_stylebox_override("disabled", _make_empty_style(8))
-	button.add_theme_stylebox_override("focus", _make_empty_style())
-	button.add_theme_color_override("font_color", Color("#C1C8CF"))
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", Color.WHITE)
+func _style_notice_button(button: Button, primary: bool) -> void:
+	var background := Color("#39645D") if primary else Color("#EFE7D5")
+	var edge := Color("#274E48") if primary else Color("#8F7F69")
+	var ink := Color("#FFF8EB") if primary else NOTICE_INK
+	button.add_theme_stylebox_override("normal", _notice_control_style(background, edge))
+	button.add_theme_stylebox_override("hover", _notice_control_style(background.lightened(0.08), edge))
+	button.add_theme_stylebox_override("pressed", _notice_control_style(background.darkened(0.10), edge))
+	button.add_theme_stylebox_override("disabled", _notice_control_style(Color("#D6CEBE"), Color("#ADA18E")))
+	button.add_theme_stylebox_override("focus", _notice_control_style(Color.TRANSPARENT, NOTICE_ACTIVE_INK))
+	button.add_theme_color_override("font_color", ink)
+	button.add_theme_color_override("font_hover_color", ink)
+	button.add_theme_color_override("font_pressed_color", ink)
+	button.add_theme_color_override("font_disabled_color", NOTICE_MUTED_INK)
 
 
-func _style_confirmed_request_slot(button: Button) -> void:
-	var glow_style := _make_black_glow_style(8)
-	button.add_theme_stylebox_override("normal", glow_style)
-	button.add_theme_stylebox_override("hover", glow_style)
-	button.add_theme_stylebox_override("pressed", glow_style)
-	button.add_theme_stylebox_override("disabled", glow_style)
-	button.add_theme_stylebox_override("focus", _make_empty_style())
-	button.add_theme_color_override("font_color", Color("#E9F6FF"))
-	button.add_theme_color_override("font_hover_color", Color.WHITE)
-	button.add_theme_color_override("font_pressed_color", Color.WHITE)
-	button.add_theme_color_override("font_disabled_color", Color("#E9F6FF"))
+func _style_notice_slot(button: Button, background: Color, edge: Color, ink: Color) -> void:
+	_style_notice_button(button, false)
+	button.add_theme_stylebox_override("normal", _notice_control_style(background, edge))
+	button.add_theme_stylebox_override("hover", _notice_control_style(background.lightened(0.12), NOTICE_ACTIVE_INK))
+	button.add_theme_stylebox_override("pressed", _notice_control_style(background.darkened(0.06), NOTICE_ACTIVE_INK))
+	button.add_theme_stylebox_override("disabled", _notice_control_style(background, edge))
+	button.add_theme_color_override("font_color", ink)
+	button.add_theme_color_override("font_disabled_color", ink)
 
 
-func _event_assignment_style(is_complete: bool, content_margin: int) -> StyleBox:
-	if is_complete:
-		return _make_black_glow_style(content_margin)
-	return _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, content_margin)
-
-
-func _make_black_glow_style(content_margin: int) -> StyleBoxFlat:
+func _notice_control_style(background: Color, edge: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#030507")
-	style.border_color = Color("#65BFFF")
-	style.set_border_width_all(2)
-	style.shadow_color = Color(0.18, 0.58, 0.88, 0.9)
-	style.shadow_size = 7
-	style.content_margin_left = content_margin
-	style.content_margin_right = content_margin
-	style.content_margin_top = content_margin
-	style.content_margin_bottom = content_margin
+	style.bg_color = background
+	style.border_color = edge
+	style.set_border_width_all(1)
+	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
+		style.set_content_margin(side, 8)
 	return style
 
 
@@ -1808,13 +1809,7 @@ func _tax_event_status_text() -> String:
 
 
 func _tax_event_status_color(is_paid: bool, can_resolve: bool) -> Color:
-	if is_paid:
-		return Color("#60A878")
-
-	if can_resolve:
-		return Color("#F4C95D")
-
-	return Color("#AAB6C2")
+	return NOTICE_ACTIVE_INK if is_paid or can_resolve else NOTICE_MUTED_INK
 
 
 func _make_empty_label(text: String) -> Label:
