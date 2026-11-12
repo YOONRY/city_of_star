@@ -5,24 +5,26 @@ enum Drawer { CLOSED, CHARACTER_PICKER, EQUIPMENT, CONSUMABLE, SHOP, PERSONNEL }
 const NO_FACILITY := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
 const JOB_TRAINING_EVENT_ID := &"job_training"
-const PIXEL_PANEL_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space.png"
-const PIXEL_PANEL_INLAY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/space_inlay.png"
-const PIXEL_BUTTON_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/blue.png"
-const PIXEL_BUTTON_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/blue_pressed.png"
-const PIXEL_BUTTON_ACCENT_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow.png"
-const PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/yellow_pressed.png"
-const PIXEL_PANEL_GREY_TEXTURE := "res://assets/vendor/kenney_pixel_ui/9slice/grey.png"
-const WINDOW_BACKGROUND_COLOR := Color("#121B24")
-const WINDOW_BORDER_COLOR := Color("#2F4659")
 const NOTICE_INK := Color("#2E2A24")
 const NOTICE_MUTED_INK := Color("#554D40")
 const NOTICE_ACTIVE_INK := Color("#245951")
+const BOARD_TITLE_INK := Color("#F6EBD6")
+const SCREEN_MARGIN := 40
+const ROSTER_WIDTH := 360
 const NoticeBoardArt := preload("res://scripts/ui/notice_board_art.gd")
 
 var notice_board_art := NoticeBoardArt.new()
 var day_value: Label
 var status_label: Label
+var event_panel: PanelContainer
 var event_list: VBoxContainer
+var event_detail_popup: PanelContainer
+var event_detail_sheet: PanelContainer
+var event_detail_title: Label
+var event_detail_pin: TextureRect
+var event_detail_close_button: Button
+var event_detail_scroll: ScrollContainer
+var event_detail_content: VBoxContainer
 var character_detail_popup: PanelContainer
 var character_detail_title: Label
 var character_detail_content: VBoxContainer
@@ -91,8 +93,8 @@ func _build_ui() -> void:
 
 	var root := MarginContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.add_theme_constant_override("margin_left", 40)
-	root.add_theme_constant_override("margin_right", 40)
+	root.add_theme_constant_override("margin_left", SCREEN_MARGIN)
+	root.add_theme_constant_override("margin_right", SCREEN_MARGIN)
 	root.add_theme_constant_override("margin_top", 32)
 	root.add_theme_constant_override("margin_bottom", 32)
 	add_child(root)
@@ -109,17 +111,22 @@ func _build_ui() -> void:
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_bar.add_child(top_spacer)
 
-	var calendar_panel := _make_panel(Color("#14202A"), Color("#2F4659"))
+	var calendar_panel := _make_wood_panel()
+	var calendar_frame := notice_board_art.board.duplicate() as StyleBoxTexture
+	calendar_frame.content_margin_top = 14
+	calendar_frame.content_margin_bottom = 14
+	calendar_panel.add_theme_stylebox_override("panel", calendar_frame)
 	calendar_panel.custom_minimum_size = Vector2(230, 0)
 	top_bar.add_child(calendar_panel)
+	var calendar_sheet := _make_paper_panel()
+	calendar_panel.add_child(calendar_sheet)
 
-	day_value = _make_label("", 30)
+	day_value = _make_ink_label("", 24, NOTICE_ACTIVE_INK)
 	day_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	day_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	day_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	day_value.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	day_value.add_theme_color_override("font_color", Color("#F4C95D"))
-	calendar_panel.add_child(day_value)
+	calendar_sheet.add_child(day_value)
 
 	var body := HBoxContainer.new()
 	body.add_theme_constant_override("separation", 18)
@@ -131,9 +138,7 @@ func _build_ui() -> void:
 	event_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(event_stage)
 
-	var event_panel := PanelContainer.new()
-	event_panel.add_theme_stylebox_override("panel", notice_board_art.board)
-	event_panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	event_panel = _make_wood_panel()
 	event_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	event_stage.add_child(event_panel)
 
@@ -141,9 +146,7 @@ func _build_ui() -> void:
 	event_box.add_theme_constant_override("separation", 14)
 	event_panel.add_child(event_box)
 
-	var board_title := _make_label("의뢰 게시판", 23)
-	board_title.add_theme_color_override("font_color", Color("#F6EBD6"))
-	event_box.add_child(board_title)
+	event_box.add_child(_make_board_title("의뢰 게시판"))
 
 	status_label = _make_label("", 13)
 	status_label.add_theme_color_override("font_color", Color("#EDE1D1"))
@@ -159,13 +162,10 @@ func _build_ui() -> void:
 	event_list.add_theme_constant_override("separation", 9)
 	event_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	event_scroll.add_child(event_list)
+	_build_event_detail_popup(event_stage)
 
-	character_detail_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
-	character_detail_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
-	character_detail_popup.offset_left = 28
-	character_detail_popup.offset_top = 28
-	character_detail_popup.offset_right = -28
-	character_detail_popup.offset_bottom = -28
+	character_detail_popup = _make_wood_panel()
+	character_detail_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	character_detail_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	character_detail_popup.visible = false
 	event_stage.add_child(character_detail_popup)
@@ -178,12 +178,13 @@ func _build_ui() -> void:
 	popup_header.add_theme_constant_override("separation", 10)
 	popup_box.add_child(popup_header)
 
-	character_detail_title = _make_label("", 20)
-	character_detail_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	character_detail_title = _make_board_title("")
+	character_detail_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	character_detail_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	popup_header.add_child(character_detail_title)
 
 	var character_detail_close_button := _make_close_button()
+	_style_board_close_button(character_detail_close_button)
 	character_detail_close_button.pressed.connect(_close_character_detail_popup)
 	popup_header.add_child(character_detail_close_button)
 
@@ -197,12 +198,8 @@ func _build_ui() -> void:
 	character_detail_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_detail_scroll.add_child(character_detail_content)
 
-	job_change_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
-	job_change_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
-	job_change_popup.offset_left = 42
-	job_change_popup.offset_top = 42
-	job_change_popup.offset_right = -42
-	job_change_popup.offset_bottom = -42
+	job_change_popup = _make_wood_panel()
+	job_change_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	job_change_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	job_change_popup.visible = false
 	event_stage.add_child(job_change_popup)
@@ -211,12 +208,11 @@ func _build_ui() -> void:
 	job_change_box.add_theme_constant_override("separation", 12)
 	job_change_popup.add_child(job_change_box)
 
-	job_change_title = _make_label("전직할 직업을 선택하세요", 20)
-	job_change_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	job_change_title = _make_board_title("전직할 직업을 선택하세요")
+	job_change_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	job_change_box.add_child(job_change_title)
 
-	var job_change_help := _make_label("직업 교육을 마쳤습니다. 조건을 만족한 직업 중 하나를 선택해야 다음 날로 진행할 수 있습니다.", 12)
-	job_change_help.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var job_change_help := _make_ink_label("직업 교육을 마쳤습니다. 조건을 만족한 직업 중 하나를 선택해야 다음 날로 진행할 수 있습니다.", 12, BOARD_TITLE_INK)
 	job_change_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	job_change_box.add_child(job_change_help)
 
@@ -230,12 +226,8 @@ func _build_ui() -> void:
 	job_change_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	job_change_scroll.add_child(job_change_content)
 
-	settlement_popup = _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
-	settlement_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
-	settlement_popup.offset_left = 36
-	settlement_popup.offset_top = 36
-	settlement_popup.offset_right = -36
-	settlement_popup.offset_bottom = -36
+	settlement_popup = _make_wood_panel()
+	settlement_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	settlement_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	settlement_popup.z_index = 30
 	settlement_popup.visible = false
@@ -249,17 +241,16 @@ func _build_ui() -> void:
 	settlement_header.add_theme_constant_override("separation", 10)
 	settlement_box.add_child(settlement_header)
 
-	var settlement_title := _make_label("일일 정산", 22)
-	settlement_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var settlement_title := _make_board_title("일일 정산")
 	settlement_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settlement_header.add_child(settlement_title)
 
 	var settlement_close_button := _make_close_button()
+	_style_board_close_button(settlement_close_button)
 	settlement_close_button.pressed.connect(_close_settlement_popup)
 	settlement_header.add_child(settlement_close_button)
 
-	var settlement_help := _make_label("전날 실행한 의뢰를 한꺼번에 판정했습니다.", 12)
-	settlement_help.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var settlement_help := _make_ink_label("전날 실행한 의뢰를 한꺼번에 판정했습니다.", 12, BOARD_TITLE_INK)
 	settlement_box.add_child(settlement_help)
 
 	var settlement_scroll := ScrollContainer.new()
@@ -273,11 +264,11 @@ func _build_ui() -> void:
 	settlement_scroll.add_child(settlement_content)
 
 	var right_column := VBoxContainer.new()
-	right_column.custom_minimum_size = Vector2(340, 0)
+	right_column.custom_minimum_size = Vector2(ROSTER_WIDTH, 0)
 	right_column.add_theme_constant_override("separation", 14)
 	body.add_child(right_column)
 
-	character_panel = _make_panel()
+	character_panel = _make_wood_panel()
 	character_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_column.add_child(character_panel)
@@ -286,7 +277,7 @@ func _build_ui() -> void:
 	character_box.add_theme_constant_override("separation", 12)
 	character_panel.add_child(character_box)
 
-	character_box.add_child(_make_section_title("Character Cards"))
+	character_box.add_child(_make_board_title("인물 목록"))
 
 	var character_scroll := ScrollContainer.new()
 	character_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -297,6 +288,10 @@ func _build_ui() -> void:
 	character_card_list.add_theme_constant_override("separation", 10)
 	character_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	character_scroll.add_child(character_card_list)
+	var dock_space := Control.new()
+	dock_space.custom_minimum_size.y = 70
+	dock_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	character_box.add_child(dock_space)
 
 	var bottom_dock := MarginContainer.new()
 	bottom_dock.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -330,16 +325,12 @@ func _build_ui() -> void:
 	next_day_button.pressed.connect(_on_next_day_pressed)
 	bottom_icon_row.add_child(next_day_button)
 
-	inventory_drawer = _make_panel(Color("#2D3036"), Color("#6F7378"))
-	inventory_drawer.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	inventory_drawer.offset_left = -430
-	inventory_drawer.offset_top = 112
-	inventory_drawer.offset_right = -32
-	inventory_drawer.offset_bottom = -32
+	inventory_drawer = _make_wood_panel()
 	inventory_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
 	inventory_drawer.z_index = 40
 	inventory_drawer.visible = false
 	add_child(inventory_drawer)
+	character_panel.item_rect_changed.connect(_align_inventory_drawer)
 
 	var drawer_box := VBoxContainer.new()
 	drawer_box.add_theme_constant_override("separation", 10)
@@ -349,20 +340,23 @@ func _build_ui() -> void:
 	drawer_header.add_theme_constant_override("separation", 10)
 	drawer_box.add_child(drawer_header)
 
-	inventory_drawer_title = _make_label("", 16)
-	inventory_drawer_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	inventory_drawer_title = _make_board_title("")
+	inventory_drawer_title.add_theme_font_size_override("font_size", 21)
+	inventory_drawer_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	inventory_drawer_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	drawer_header.add_child(inventory_drawer_title)
 
 	inventory_close_button = _make_close_button()
+	_style_board_close_button(inventory_close_button)
 	inventory_close_button.pressed.connect(_dismiss_inventory_drawer)
 	drawer_header.add_child(inventory_close_button)
 
-	facility_balance_label = _make_label("", 14)
+	facility_balance_label = _make_ink_label("", 14, BOARD_TITLE_INK)
 	facility_balance_label.visible = false
 	drawer_box.add_child(facility_balance_label)
 
 	shop_tabs = TabBar.new()
+	_style_notice_tabs(shop_tabs)
 	shop_tabs.add_tab("구매")
 	shop_tabs.add_tab("판매")
 	shop_tabs.visible = false
@@ -382,6 +376,52 @@ func _build_ui() -> void:
 	_build_player_creation_overlay()
 
 
+func _align_inventory_drawer() -> void:
+	var bounds := character_panel.get_global_rect()
+	inventory_drawer.position = bounds.position - global_position
+	inventory_drawer.size = bounds.size
+
+
+func _build_event_detail_popup(stage: Control) -> void:
+	event_detail_popup = _make_wood_panel()
+	event_detail_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	event_detail_popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	event_detail_popup.hide()
+	stage.add_child(event_detail_popup)
+
+	event_detail_sheet = PanelContainer.new()
+	event_detail_popup.add_child(event_detail_sheet)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 16)
+	event_detail_sheet.add_child(layout)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 10)
+	layout.add_child(header)
+	event_detail_pin = TextureRect.new()
+	event_detail_pin.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	header.add_child(event_detail_pin)
+	event_detail_title = _make_ink_label("", 24)
+	event_detail_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_detail_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	header.add_child(event_detail_title)
+	event_detail_close_button = _make_close_button()
+	event_detail_close_button.tooltip_text = "의뢰 목록으로 돌아가기"
+	event_detail_close_button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_style_notice_button(event_detail_close_button, false)
+	event_detail_close_button.pressed.connect(_close_event_detail)
+	header.add_child(event_detail_close_button)
+	layout.add_child(HSeparator.new())
+
+	event_detail_scroll = ScrollContainer.new()
+	event_detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	event_detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(event_detail_scroll)
+	event_detail_content = VBoxContainer.new()
+	event_detail_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_detail_scroll.add_child(event_detail_content)
+
+
 func _build_player_creation_overlay() -> void:
 	player_creation_overlay = Control.new()
 	player_creation_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -390,28 +430,28 @@ func _build_player_creation_overlay() -> void:
 	add_child(player_creation_overlay)
 
 	var backdrop := ColorRect.new()
-	backdrop.color = Color(0.03, 0.05, 0.08, 0.94)
+	backdrop.color = Color("#131617ed")
 	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 	player_creation_overlay.add_child(backdrop)
 
-	var panel := _make_panel(WINDOW_BACKGROUND_COLOR, WINDOW_BORDER_COLOR)
+	var panel := _make_wood_panel()
 	panel.anchor_left = 0.16
 	panel.anchor_top = 0.06
 	panel.anchor_right = 0.84
 	panel.anchor_bottom = 0.94
 	player_creation_overlay.add_child(panel)
 
+	var sheet := _make_paper_panel(notice_board_art.selected_note)
+	panel.add_child(sheet)
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 12)
-	panel.add_child(outer)
+	sheet.add_child(outer)
 
-	var title := _make_label("플레이어 캐릭터 생성", 22)
-	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var title := _make_ink_label("플레이어 캐릭터 생성", 23)
 	outer.add_child(title)
 
-	var guide := _make_label("모든 개인 성장치는 10에서 시작합니다. 추가 성장치 80점을 분배하고 초기 개인 스킬 2개를 선택하세요.", 12)
-	guide.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var guide := _make_ink_label("모든 개인 성장치는 10에서 시작합니다. 추가 성장치 80점을 분배하고 초기 개인 스킬 2개를 선택하세요.", 13, NOTICE_MUTED_INK)
 	guide.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(guide)
 
@@ -431,15 +471,17 @@ func _build_player_creation_overlay() -> void:
 	identity_grid.add_theme_constant_override("v_separation", 8)
 	content.add_child(identity_grid)
 
-	identity_grid.add_child(_make_label("이름", 13))
+	identity_grid.add_child(_make_ink_label("이름", 13))
 	player_name_input = LineEdit.new()
+	_style_paper_input(player_name_input)
 	player_name_input.text = "별의 아이"
 	player_name_input.max_length = 20
 	player_name_input.text_changed.connect(_on_player_creation_changed)
 	identity_grid.add_child(player_name_input)
 
-	identity_grid.add_child(_make_label("종족", 13))
+	identity_grid.add_child(_make_ink_label("종족", 13))
 	player_species_option = OptionButton.new()
+	_style_paper_option(player_species_option)
 	player_species_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for species_definition in ContentCatalog.species:
 		var species_index := player_species_option.item_count
@@ -447,8 +489,9 @@ func _build_player_creation_overlay() -> void:
 		player_species_option.set_item_metadata(species_index, species_definition.id)
 	identity_grid.add_child(player_species_option)
 
-	identity_grid.add_child(_make_label("기본직업", 13))
+	identity_grid.add_child(_make_ink_label("기본직업", 13))
 	player_job_option = OptionButton.new()
+	_style_paper_option(player_job_option)
 	player_job_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for job in ContentCatalog.jobs:
 		if job == null or not job.is_basic_job():
@@ -458,66 +501,79 @@ func _build_player_creation_overlay() -> void:
 		player_job_option.set_item_metadata(job_index, job.id)
 	identity_grid.add_child(player_job_option)
 
+	content.add_child(HSeparator.new())
+	var choices := HBoxContainer.new()
+	choices.add_theme_constant_override("separation", 24)
+	content.add_child(choices)
+	var growth_column := VBoxContainer.new()
+	growth_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	growth_column.add_theme_constant_override("separation", 8)
+	choices.add_child(growth_column)
+	var skill_column := VBoxContainer.new()
+	skill_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skill_column.add_theme_constant_override("separation", 8)
+	choices.add_child(skill_column)
+
 	var growth_header := HBoxContainer.new()
-	content.add_child(growth_header)
-	var growth_title := _make_label("개인 성장치", 14)
+	growth_column.add_child(growth_header)
+	var growth_title := _make_ink_label("개인 성장치", 15, NOTICE_ACTIVE_INK)
 	growth_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	growth_title.add_theme_color_override("font_color", Color("#F4C95D"))
 	growth_header.add_child(growth_title)
-	player_growth_remaining_label = _make_label("", 13)
+	player_growth_remaining_label = _make_ink_label("", 13, NOTICE_MUTED_INK)
 	growth_header.add_child(player_growth_remaining_label)
 
 	var growth_grid := GridContainer.new()
 	growth_grid.columns = 4
 	growth_grid.add_theme_constant_override("h_separation", 10)
 	growth_grid.add_theme_constant_override("v_separation", 6)
-	content.add_child(growth_grid)
+	growth_column.add_child(growth_grid)
 	_add_player_growth_row(growth_grid, "strength", "STR")
 	_add_player_growth_row(growth_grid, "agility", "AGI")
 	_add_player_growth_row(growth_grid, "intelligence", "INT")
 	_add_player_growth_row(growth_grid, "charm", "CHM")
 	_add_player_growth_row(growth_grid, "health", "HP")
 
-	var skill_title := _make_label("초기 개인 스킬 · 2개 선택", 14)
-	skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
-	content.add_child(skill_title)
+	var skill_title := _make_ink_label("초기 개인 스킬", 15, NOTICE_ACTIVE_INK)
+	skill_column.add_child(skill_title)
 
 	var skill_grid := GridContainer.new()
 	skill_grid.columns = 2
 	skill_grid.add_theme_constant_override("h_separation", 18)
 	skill_grid.add_theme_constant_override("v_separation", 5)
-	content.add_child(skill_grid)
+	skill_column.add_child(skill_grid)
 	for skill_id in GameState.get_player_initial_skill_options():
 		var checkbox := CheckBox.new()
 		checkbox.text = skill_id
+		_style_paper_checkbox(checkbox)
 		checkbox.toggled.connect(_on_player_skill_toggled.bind(skill_id))
 		player_skill_checkboxes[skill_id] = checkbox
 		skill_grid.add_child(checkbox)
 
-	player_creation_status_label = _make_label("", 12)
-	player_creation_status_label.add_theme_color_override("font_color", Color("#AAB6C2"))
-	content.add_child(player_creation_status_label)
+	player_creation_status_label = _make_ink_label("", 13, NOTICE_MUTED_INK)
+	player_creation_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	skill_column.add_child(player_creation_status_label)
 
 	player_create_button = Button.new()
 	player_create_button.text = "캐릭터 생성"
 	player_create_button.custom_minimum_size = Vector2(0, 42)
 	player_create_button.focus_mode = Control.FOCUS_NONE
-	_style_pixel_button(player_create_button, true)
+	_style_notice_button(player_create_button, true)
 	player_create_button.pressed.connect(_on_player_create_pressed)
 	outer.add_child(player_create_button)
 	_refresh_player_creation_form()
 
 
 func _add_player_growth_row(grid: GridContainer, stat_key: String, stat_label: String) -> void:
-	grid.add_child(_make_label(stat_label, 13))
+	grid.add_child(_make_ink_label(stat_label, 13))
 	var decrease_button := Button.new()
 	decrease_button.text = "-10"
 	decrease_button.focus_mode = Control.FOCUS_NONE
-	_style_pixel_button(decrease_button, false)
+	_style_notice_button(decrease_button, false)
 	decrease_button.pressed.connect(_on_player_growth_adjusted.bind(stat_key, -10))
 	grid.add_child(decrease_button)
 
-	var value_label := _make_label(str(player_creation_growth[stat_key]), 13)
+	var value_label := _make_ink_label(str(player_creation_growth[stat_key]), 13)
+	value_label.custom_minimum_size.x = 32
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	player_growth_value_labels[stat_key] = value_label
 	grid.add_child(value_label)
@@ -525,7 +581,7 @@ func _add_player_growth_row(grid: GridContainer, stat_key: String, stat_label: S
 	var increase_button := Button.new()
 	increase_button.text = "+10"
 	increase_button.focus_mode = Control.FOCUS_NONE
-	_style_pixel_button(increase_button, false)
+	_style_notice_button(increase_button, false)
 	increase_button.pressed.connect(_on_player_growth_adjusted.bind(stat_key, 10))
 	grid.add_child(increase_button)
 
@@ -540,7 +596,7 @@ func _refresh_player_creation_form() -> void:
 		total_growth += int(value)
 	var remaining := GameState.PLAYER_GROWTH_BUDGET - total_growth
 	player_growth_remaining_label.text = "남은 점수: %s" % remaining
-	player_growth_remaining_label.add_theme_color_override("font_color", Color("#B7F6C7") if remaining == 0 else Color("#F4C95D"))
+	player_growth_remaining_label.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if remaining == 0 else NOTICE_MUTED_INK)
 
 	for stat_key in player_growth_value_labels:
 		var value_label := player_growth_value_labels[stat_key] as Label
@@ -636,32 +692,66 @@ func _on_player_create_pressed() -> void:
 		player_creation_status_label.text = "캐릭터 생성 조건을 다시 확인하세요."
 
 
-func _make_panel(_background_color: Color = Color("#18222C"), border_color: Color = Color("#2F4659")) -> PanelContainer:
+func _make_wood_panel() -> PanelContainer:
 	var panel := PanelContainer.new()
-	var texture_path := PIXEL_PANEL_TEXTURE
-	if border_color == Color("#F4C95D"):
-		texture_path = PIXEL_BUTTON_ACCENT_TEXTURE
-	elif border_color == Color("#38556A"):
-		texture_path = PIXEL_PANEL_INLAY_TEXTURE
-	elif border_color == Color("#6F7378"):
-		texture_path = PIXEL_PANEL_GREY_TEXTURE
-	var style := _make_pixel_style(texture_path, 8, 18)
-	panel.add_theme_stylebox_override("panel", style)
+	panel.add_theme_stylebox_override("panel", notice_board_art.board)
+	panel.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	return panel
 
 
-func _make_pixel_style(texture_path: String, texture_margin: int, content_margin: int) -> StyleBoxTexture:
-	var style := StyleBoxTexture.new()
-	style.texture = load(texture_path)
-	style.texture_margin_left = texture_margin
-	style.texture_margin_right = texture_margin
-	style.texture_margin_top = texture_margin
-	style.texture_margin_bottom = texture_margin
-	style.content_margin_left = content_margin
-	style.content_margin_right = content_margin
-	style.content_margin_top = content_margin
-	style.content_margin_bottom = content_margin
-	return style
+func _make_paper_panel(style: StyleBoxTexture = null) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", style if style != null else notice_board_art.note)
+	return panel
+
+
+func _make_board_title(title: String) -> Label:
+	var label := _make_label(title, 23)
+	label.add_theme_color_override("font_color", BOARD_TITLE_INK)
+	return label
+
+
+func _make_ink_label(value: String, font_size: int, color: Color = NOTICE_INK) -> Label:
+	var label := _make_label(value, font_size)
+	label.add_theme_color_override("font_color", color)
+	return label
+
+
+func _style_board_close_button(button: Button) -> void:
+	_style_clear_button(button)
+	button.add_theme_color_override("font_color", BOARD_TITLE_INK)
+	button.add_theme_color_override("font_hover_color", Color.WHITE)
+
+
+func _style_paper_input(input: LineEdit) -> void:
+	input.add_theme_stylebox_override("normal", _notice_control_style(Color("#F5EDDD"), Color("#A39783")))
+	input.add_theme_stylebox_override("focus", _notice_control_style(Color.TRANSPARENT, NOTICE_ACTIVE_INK))
+	input.add_theme_color_override("font_color", NOTICE_INK)
+	input.add_theme_color_override("font_selected_color", NOTICE_INK)
+	input.add_theme_color_override("font_placeholder_color", NOTICE_MUTED_INK)
+	input.add_theme_color_override("caret_color", NOTICE_ACTIVE_INK)
+	input.add_theme_color_override("selection_color", Color("#B5CBC0"))
+
+
+func _style_paper_option(option: OptionButton) -> void:
+	_style_notice_button(option, false)
+	option.add_theme_constant_override("modulate_arrow", 1)
+	var menu := option.get_popup()
+	menu.add_theme_stylebox_override("panel", notice_board_art.note)
+	menu.add_theme_stylebox_override("hover", _notice_control_style(Color("#CDD9CC"), Color("#688077")))
+	menu.add_theme_color_override("font_color", NOTICE_INK)
+	menu.add_theme_color_override("font_hover_color", NOTICE_ACTIVE_INK)
+	menu.add_theme_constant_override("v_separation", 8)
+
+
+func _style_paper_checkbox(checkbox: CheckBox) -> void:
+	_style_clear_button(checkbox)
+	checkbox.add_theme_stylebox_override("focus", _notice_control_style(Color.TRANSPARENT, NOTICE_ACTIVE_INK))
+	checkbox.add_theme_icon_override("unchecked", notice_board_art.check_off)
+	checkbox.add_theme_icon_override("checked", notice_board_art.check_on)
+	checkbox.add_theme_color_override("font_color", NOTICE_INK)
+	checkbox.add_theme_color_override("font_hover_color", NOTICE_ACTIVE_INK)
+	checkbox.add_theme_color_override("font_pressed_color", NOTICE_ACTIVE_INK)
 
 
 func _make_empty_style(content_margin: int = 0) -> StyleBoxEmpty:
@@ -677,31 +767,30 @@ func _make_card_row(card: CardDefinition) -> PanelContainer:
 	if card.is_character():
 		return _make_character_card_row(card)
 
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	var is_equip_target := card.is_equipment() and not equipment_target_character_id.is_empty()
+	var row := _make_paper_panel(notice_board_art.selected_note if is_equip_target else notice_board_art.note)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 5)
 	row.add_child(box)
 
-	var name_label := _make_label(card.label(), 14)
+	var name_label := _make_ink_label(card.label(), 16)
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	box.add_child(name_label)
 
-	var meta_label := _make_label(_card_meta(card), 12)
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var meta_label := _make_ink_label(_card_meta(card), 12, NOTICE_MUTED_INK)
 	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(meta_label)
 
-	var stat_label := _make_label(_format_stats(card.stats), 12)
-	stat_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	var stat_label := _make_ink_label(_format_stats(card.stats), 12)
+	stat_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(stat_label)
 
-	if card.is_equipment() and not String(equipment_target_character_id).is_empty():
+	if is_equip_target:
 		row.mouse_filter = Control.MOUSE_FILTER_STOP
-		row.tooltip_text = "Click to equip."
+		row.tooltip_text = "장착"
 		row.gui_input.connect(_on_equipment_card_gui_input.bind(card.id))
 		_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 
@@ -713,9 +802,7 @@ func _make_money_stack_card() -> PanelContainer:
 	var tax_amount := GameState.tax_manager.weekly_tax
 	var is_current_week_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
 	var can_assign_money := is_tax_target and not is_current_week_paid and GameState.office.money >= tax_amount
-	var row := PanelContainer.new()
-	var texture_path := PIXEL_BUTTON_ACCENT_TEXTURE if can_assign_money else PIXEL_PANEL_INLAY_TEXTURE
-	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
+	var row := _make_paper_panel(notice_board_art.completed_note if can_assign_money else notice_board_art.note)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.tooltip_text = "Click to place funds into the tax event." if can_assign_money else "Current office funds are shown as a stack."
@@ -729,73 +816,57 @@ func _make_money_stack_card() -> PanelContainer:
 	stack_visual.custom_minimum_size = Vector2(78, 64)
 	box.add_child(stack_visual)
 
-	stack_visual.add_child(_make_money_stack_layer(Vector2(18, 0), Color("#18222C"), Color("#4A6577"), "", 10))
-	stack_visual.add_child(_make_money_stack_layer(Vector2(10, 8), Color("#202D36"), Color("#738898"), "", 10))
-	stack_visual.add_child(_make_money_stack_layer(Vector2(2, 16), Color("#34414A"), Color("#D6A64F"), "$", 22))
+	stack_visual.add_child(_make_money_stack_layer(Vector2(18, 0), Color("#93A492")))
+	stack_visual.add_child(_make_money_stack_layer(Vector2(10, 8), Color("#ACBDAC")))
+	stack_visual.add_child(_make_money_stack_layer(Vector2(2, 16), Color("#CFDACA"), "$"))
 
 	var summary := VBoxContainer.new()
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	summary.add_theme_constant_override("separation", 4)
 	box.add_child(summary)
 
-	var name_label := _make_label("Office Funds", 15)
+	var name_label := _make_ink_label("보유 자금", 15)
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	summary.add_child(name_label)
 
-	var amount_label := _make_label("%s money" % GameState.office.money, 22)
-	amount_label.add_theme_color_override("font_color", Color("#F4C95D"))
+	var amount_label := _make_ink_label("%s money" % GameState.office.money, 22, NOTICE_ACTIVE_INK)
+	amount_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_child(amount_label)
 
-	var meta_text := "Currency stack / current balance"
+	var meta_text := ""
 	if is_tax_target:
 		if is_current_week_paid:
-			meta_text = "Current week's tax is already paid"
+			meta_text = "이번 주 납부 완료"
 		elif can_assign_money:
-			meta_text = "Ready to place %s money into tax event" % tax_amount
+			meta_text = "납부할 금액: %s money" % tax_amount
 		else:
-			meta_text = "Need %s more money for tax event" % maxi(0, tax_amount - GameState.office.money)
+			meta_text = "부족한 금액: %s money" % maxi(0, tax_amount - GameState.office.money)
 
-	var meta_label := _make_label(meta_text, 12)
-	meta_label.add_theme_color_override("font_color", Color("#AAB6C2"))
-	meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary.add_child(meta_label)
+	if not meta_text.is_empty():
+		var meta_label := _make_ink_label(meta_text, 12, NOTICE_MUTED_INK)
+		meta_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		summary.add_child(meta_label)
 
 	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
 	return row
 
 
-func _make_money_stack_layer(offset: Vector2, background_color: Color, border_color: Color, text: String, font_size: int) -> PanelContainer:
+func _make_money_stack_layer(offset: Vector2, background_color: Color, text: String = "") -> PanelContainer:
 	var layer := PanelContainer.new()
 	layer.position = offset
 	layer.custom_minimum_size = Vector2(56, 42)
 	layer.size = Vector2(56, 42)
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = background_color
-	style.border_color = border_color
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.corner_radius_top_left = 5
-	style.corner_radius_top_right = 5
-	style.corner_radius_bottom_left = 5
-	style.corner_radius_bottom_right = 5
-	style.content_margin_left = 4
-	style.content_margin_right = 4
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	layer.add_theme_stylebox_override("panel", style)
+	layer.add_theme_stylebox_override("panel", _notice_control_style(background_color, Color("#607866")))
 
 	if not text.is_empty():
-		var label := _make_label(text, font_size)
+		var label := _make_ink_label(text, 20, NOTICE_ACTIVE_INK)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		label.add_theme_color_override("font_color", Color("#F4C95D"))
 		layer.add_child(label)
 
 	return layer
@@ -807,12 +878,15 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	var assigned_event := _character_event_assignment_label(card)
 	var is_event_selection := active_drawer_type == Drawer.CHARACTER_PICKER
 	var is_unavailable_for_event := is_event_selection and not assigned_event.is_empty()
-	var texture_path := PIXEL_BUTTON_TEXTURE if is_selected else PIXEL_PANEL_TEXTURE
-	row.add_theme_stylebox_override("panel", _make_pixel_style(texture_path, 8, 12))
+	var style := notice_board_art.note
+	if not assigned_event.is_empty():
+		style = notice_board_art.completed_note
+	if is_selected:
+		style = notice_board_art.selected_note
+	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	if not assigned_event.is_empty():
-		row.modulate = Color(0.58, 0.62, 0.68, 1.0)
 		row.tooltip_text = "%s에 배치 중" % assigned_event
 	else:
 		row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
@@ -834,7 +908,7 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	summary.custom_minimum_size = Vector2(0, 56)
 	header.add_child(summary)
 
-	var name_label := _make_label(card.label(), 19)
+	var name_label := _make_ink_label(card.label(), 19)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -844,15 +918,15 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	summary_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	summary.add_child(summary_spacer)
 
-	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 12)
+	var job_label := _make_ink_label("%s / %s" % [_character_species(card), _character_job(card)], 12, NOTICE_MUTED_INK)
 	job_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	job_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	summary.add_child(job_label)
 
 	if not assigned_event.is_empty():
-		var assignment_label := _make_label("배치 중 · %s" % assigned_event, 12)
+		var assignment_label := _make_ink_label("배치 중 · %s" % assigned_event, 12, NOTICE_ACTIVE_INK)
 		assignment_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		assignment_label.add_theme_color_override("font_color", Color("#8FCBFF"))
+		assignment_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		summary.add_child(assignment_label)
 
 	_set_mouse_filter_recursive(box, Control.MOUSE_FILTER_IGNORE)
@@ -863,14 +937,13 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 func _make_profile_frame(card: CardDefinition) -> PanelContainer:
 	var frame := PanelContainer.new()
 	frame.custom_minimum_size = Vector2(56, 56)
-	frame.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 8))
+	frame.add_theme_stylebox_override("panel", _notice_control_style(Color("#C0CFC4"), Color("#6F887B")))
 
-	var label := _make_label(_card_initials(card), 20)
+	var label := _make_ink_label(_card_initials(card), 20, NOTICE_ACTIVE_INK)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	label.add_theme_color_override("font_color", Color("#F4C95D"))
 	frame.add_child(label)
 	return frame
 
@@ -879,11 +952,8 @@ func _make_character_detail(card: CardDefinition) -> TabContainer:
 	var detail := TabContainer.new()
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_TEXTURE, 8, 12))
-	detail.add_theme_stylebox_override("tab_selected", _make_pixel_style(PIXEL_BUTTON_ACCENT_TEXTURE, 8, 8))
-	detail.add_theme_stylebox_override("tab_unselected", _make_pixel_style(PIXEL_BUTTON_TEXTURE, 8, 8))
-	detail.add_theme_color_override("font_selected_color", Color("#2B2617"))
-	detail.add_theme_color_override("font_unselected_color", Color("#F3F4F6"))
+	detail.add_theme_stylebox_override("panel", notice_board_art.selected_note)
+	_style_notice_tabs(detail)
 	detail.add_child(_make_character_status_tab(card))
 	detail.add_child(_make_character_growth_tab(card))
 	detail.add_child(_make_character_skills_tab(card))
@@ -908,8 +978,7 @@ func _make_character_status_tab(card: CardDefinition) -> VBoxContainer:
 	_add_metric(info, "Job Level").text = "%s / %s" % [GameState.get_character_job_level(card, GameState.get_character_current_job_id(card)), GameState.MAX_JOB_LEVEL]
 	_add_metric(info, "Level").text = str(GameState.get_character_level(card))
 
-	var title := _make_label("Total Stats", 13)
-	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var title := _make_ink_label("Total Stats", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(title)
 
 	var effective_stats := GameState.get_effective_stats(card)
@@ -945,31 +1014,26 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 	tab.name = "Skills"
 	tab.add_theme_constant_override("separation", 8)
 
-	var skill_title := _make_label("Skills", 13)
-	skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var skill_title := _make_ink_label("Skills", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(skill_title)
 
-	var skill_label := _make_label(_format_string_array(card.skill_ids, "None"), 12)
-	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var skill_label := _make_ink_label(_format_string_array(card.skill_ids, "None"), 12, NOTICE_MUTED_INK)
 	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(skill_label)
 
-	var species_skill_title := _make_label("Species Skills", 13)
-	species_skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var species_skill_title := _make_ink_label("Species Skills", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(species_skill_title)
 
-	var species_skill_label := _make_label(_format_string_array(_species_skills(card), "None"), 12)
-	species_skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var species_skill_label := _make_ink_label(_format_string_array(_species_skills(card), "None"), 12, NOTICE_MUTED_INK)
 	species_skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(species_skill_label)
 
-	var job_skill_title := _make_label("Learned Job Skills", 13)
-	job_skill_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var job_skill_title := _make_ink_label("Learned Job Skills", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(job_skill_title)
 
 	var learned_skill_ids := GameState.get_character_job_skill_ids(card)
 	if learned_skill_ids.is_empty():
-		tab.add_child(_make_label("None", 12))
+		tab.add_child(_make_ink_label("None", 12, NOTICE_MUTED_INK))
 	for skill_id in learned_skill_ids:
 		tab.add_child(_make_job_skill_entry(skill_id))
 
@@ -986,19 +1050,16 @@ func _make_character_skills_tab(card: CardDefinition) -> VBoxContainer:
 			if unlock_level > job_level and not learned_skill_ids.has(current_job.skill_ids[index]):
 				upcoming.add_child(_make_job_skill_entry(current_job.skill_ids[index], unlock_level))
 		if upcoming.get_child_count() > 0:
-			var upcoming_title := _make_label("미습득 직업 스킬", 13)
-			upcoming_title.add_theme_color_override("font_color", Color("#F4C95D"))
+			var upcoming_title := _make_ink_label("미습득 직업 스킬", 13, NOTICE_ACTIVE_INK)
 			tab.add_child(upcoming_title)
 			tab.add_child(upcoming)
 		else:
 			upcoming.free()
 
-	var tag_title := _make_label("Tags", 13)
-	tag_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var tag_title := _make_ink_label("Tags", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(tag_title)
 
-	var tag_label := _make_label(_format_string_array(card.tags, "None"), 12)
-	tag_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var tag_label := _make_ink_label(_format_string_array(card.tags, "None"), 12, NOTICE_MUTED_INK)
 	tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tab.add_child(tag_label)
 	return tab
@@ -1010,7 +1071,7 @@ func _make_job_skill_entry(skill_id: String, unlock_level: int = 0) -> VBoxConta
 	entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var skill := ContentCatalog.get_skill(int(skill_id)) if skill_id.is_valid_int() else null
 	if skill == null:
-		var legacy_label := _make_label(skill_id, 12)
+		var legacy_label := _make_ink_label(skill_id, 12)
 		legacy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		entry.add_child(legacy_label)
 		return entry
@@ -1018,21 +1079,19 @@ func _make_job_skill_entry(skill_id: String, unlock_level: int = 0) -> VBoxConta
 	var title_text := skill.display_name
 	if unlock_level > 0:
 		title_text += " · Lv.%s" % unlock_level
-	var title := _make_label(title_text, 14)
+	var title := _make_ink_label(title_text, 14, NOTICE_MUTED_INK if unlock_level > 0 else NOTICE_ACTIVE_INK)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title.add_theme_color_override("font_color", Color("#AAB6C2") if unlock_level > 0 else Color("#F4C95D"))
 	entry.add_child(title)
 	var metadata := PackedStringArray([skill.type_label()])
 	if skill.is_active():
 		metadata.append("AP %s" % skill.ap_cost if skill.ap_cost >= 0 else "AP 미정")
 	if not skill.damage_label().is_empty():
 		metadata.append(skill.damage_label())
-	var metadata_label := _make_label(" · ".join(metadata), 12)
+	var metadata_label := _make_ink_label(" · ".join(metadata), 12)
 	metadata_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	entry.add_child(metadata_label)
-	var description := _make_label(skill.effect_text, 12)
+	var description := _make_ink_label(skill.effect_text, 12)
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	description.add_theme_color_override("font_color", Color("#D7DEE8"))
 	entry.add_child(description)
 
 	var columns := PackedStringArray()
@@ -1045,9 +1104,8 @@ func _make_job_skill_entry(skill_id: String, unlock_level: int = 0) -> VBoxConta
 		conditions.append("주 스탯: %s" % skill.main_stat)
 	if not skill.target_text.is_empty():
 		conditions.append("대상: %s" % skill.target_text)
-	var conditions_label := _make_label(" · ".join(conditions), 12)
+	var conditions_label := _make_ink_label(" · ".join(conditions), 12, NOTICE_MUTED_INK)
 	conditions_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	conditions_label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	entry.add_child(conditions_label)
 	entry.add_child(HSeparator.new())
 	return entry
@@ -1060,20 +1118,18 @@ func _make_character_job_history_tab(card: CardDefinition) -> VBoxContainer:
 
 	var current_job_id := GameState.get_character_current_job_id(card)
 	var current_level := GameState.get_character_job_level(card, current_job_id)
-	var current_title := _make_label("Current: %s  Lv.%s/%s" % [_job_label(current_job_id), current_level, GameState.MAX_JOB_LEVEL], 13)
-	current_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var current_title := _make_ink_label("Current: %s  Lv.%s/%s" % [_job_label(current_job_id), current_level, GameState.MAX_JOB_LEVEL], 13, NOTICE_ACTIVE_INK)
 	tab.add_child(current_title)
 
 	var train_button := Button.new()
 	train_button.text = "Job Mastered" if current_level >= GameState.MAX_JOB_LEVEL else "Train Current Job"
 	train_button.focus_mode = Control.FOCUS_NONE
 	train_button.disabled = not GameState.can_level_up_current_job(card)
-	_style_pixel_button(train_button, true)
+	_style_notice_button(train_button, true)
 	train_button.pressed.connect(_on_job_level_up_pressed.bind(card.id))
 	tab.add_child(train_button)
 
-	var history_title := _make_label("Previous / Acquired Jobs", 13)
-	history_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var history_title := _make_ink_label("Previous / Acquired Jobs", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(history_title)
 
 	var levels := GameState.get_character_job_levels(card)
@@ -1086,8 +1142,7 @@ func _make_character_job_history_tab(card: CardDefinition) -> VBoxContainer:
 			continue
 		tab.add_child(_make_job_history_row(card, job, level, job.id == current_job_id))
 
-	var available_title := _make_label("Available Jobs", 13)
-	available_title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var available_title := _make_ink_label("Available Jobs", 13, NOTICE_ACTIVE_INK)
 	tab.add_child(available_title)
 
 	for job in ContentCatalog.jobs:
@@ -1101,16 +1156,15 @@ func _make_character_job_history_tab(card: CardDefinition) -> VBoxContainer:
 func _make_job_history_row(card: CardDefinition, job: JobDefinition, level: int, is_current: bool) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var mastered_text := "  MASTER" if level >= GameState.MAX_JOB_LEVEL else ""
-	var label := _make_label("%s  Lv.%s%s" % [job.label(), level, mastered_text], 12)
+	var label := _make_ink_label("%s  Lv.%s%s" % [job.label(), level, mastered_text], 12)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_color_override("font_color", Color("#AAB6C2"))
 	row.add_child(label)
 
 	var button := Button.new()
 	button.text = "Current" if is_current else "교육소"
 	button.focus_mode = Control.FOCUS_NONE
 	button.disabled = true
-	_style_pixel_button(button, false)
+	_style_notice_button(button, false)
 	row.add_child(button)
 	return row
 
@@ -1122,16 +1176,16 @@ func _make_job_candidate_row(card: CardDefinition, job: JobDefinition) -> HBoxCo
 	if not job.is_basic_job():
 		description += "  (%s)" % job.requirement_text()
 
-	var label := _make_label(description, 12)
+	var label := _make_ink_label(description, 12, NOTICE_INK if can_change else NOTICE_MUTED_INK)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_color_override("font_color", Color("#AAB6C2") if can_change else Color("#697682"))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(label)
 
 	var button := Button.new()
 	button.text = "교육소"
 	button.focus_mode = Control.FOCUS_NONE
 	button.disabled = true
-	_style_pixel_button(button, can_change)
+	_style_notice_button(button, can_change)
 	row.add_child(button)
 	return row
 
@@ -1148,16 +1202,16 @@ func _make_character_level_up_row(card: CardDefinition) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 
-	var gain_label := _make_label("Next %s" % _format_level_up_gain(GameState.get_character_level_up_gain(card)), 12)
-	gain_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var gain_label := _make_ink_label("Next %s" % _format_level_up_gain(GameState.get_character_level_up_gain(card)), 12, NOTICE_MUTED_INK)
 	gain_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gain_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(gain_label)
 
 	var level_up_button := Button.new()
 	level_up_button.text = "Level Up"
 	level_up_button.focus_mode = Control.FOCUS_NONE
 	level_up_button.disabled = GameState.is_game_over
-	_style_pixel_button(level_up_button, true)
+	_style_notice_button(level_up_button, true)
 	level_up_button.pressed.connect(_on_level_up_pressed.bind(card.id))
 	row.add_child(level_up_button)
 	return row
@@ -1167,8 +1221,7 @@ func _make_character_growth_section(card: CardDefinition) -> VBoxContainer:
 	var section := VBoxContainer.new()
 	section.add_theme_constant_override("separation", 6)
 
-	var title := _make_label("Growth", 13)
-	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var title := _make_ink_label("Growth", 13, NOTICE_ACTIVE_INK)
 	section.add_child(title)
 
 	var character_growth := StatBlock.new()
@@ -1194,15 +1247,14 @@ func _make_character_growth_section(card: CardDefinition) -> VBoxContainer:
 
 
 func _make_growth_label(stat_name: String, character_growth: int, species_growth: int, job_growth: int, total_growth: int, level_gain: int) -> Label:
-	var label := _make_label("%s Personal %s + Species %s + Job %s = %s  (+%s)" % [
+	var label := _make_ink_label("%s Personal %s + Species %s + Job %s = %s  (+%s)" % [
 		stat_name,
 		character_growth,
 		species_growth,
 		job_growth,
 		total_growth,
 		level_gain,
-	], 12)
-	label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	], 12, NOTICE_MUTED_INK)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return label
 
@@ -1211,8 +1263,7 @@ func _make_equipment_slot_section(card: CardDefinition) -> VBoxContainer:
 	var section := VBoxContainer.new()
 	section.add_theme_constant_override("separation", 6)
 
-	var title := _make_label("Equipment Slots", 13)
-	title.add_theme_color_override("font_color", Color("#F4C95D"))
+	var title := _make_ink_label("Equipment Slots", 13, NOTICE_ACTIVE_INK)
 	section.add_child(title)
 
 	var slots := VBoxContainer.new()
@@ -1239,7 +1290,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 	if equipment == null:
 		button.text = "Slot %s: Add equipment" % (slot_index + 1)
 		button.disabled = GameState.is_game_over
-		_style_pixel_button(button, true)
+		_style_notice_button(button, true)
 		button.pressed.connect(_on_equipment_slot_pressed.bind(character.id))
 	else:
 		button.text = "Slot %s: %s  %s" % [
@@ -1250,7 +1301,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 		button.clip_text = true
 		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		button.tooltip_text = "%s\n%s\nClick to unequip." % [equipment.label(), _format_stats(equipment.stats)]
-		_style_pixel_button(button, false)
+		_style_notice_button(button, false)
 		button.pressed.connect(_on_unequip_pressed.bind(character.id, equipment.id))
 
 	return button
@@ -1258,7 +1309,7 @@ func _make_equipment_slot_button(character: CardDefinition, equipment: CardDefin
 
 func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	row.add_theme_stylebox_override("panel", notice_board_art.note)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var box := VBoxContainer.new()
@@ -1275,33 +1326,31 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(summary)
 
-	var name_label := _make_label(card.label(), 15)
+	var name_label := _make_ink_label(card.label(), 16)
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	summary.add_child(name_label)
 
-	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 12)
-	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var job_label := _make_ink_label("%s / %s" % [_character_species(card), _character_job(card)], 12, NOTICE_MUTED_INK)
+	job_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_child(job_label)
 
-	var cost_label := _make_label("고용 비용 %s" % GameState.get_hire_cost(card), 12)
-	cost_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	var cost_label := _make_ink_label("고용 비용 %s" % GameState.get_hire_cost(card), 12, NOTICE_ACTIVE_INK)
 	summary.add_child(cost_label)
 
 	var hire_button := Button.new()
 	hire_button.text = "고용"
+	hire_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hire_button.disabled = not GameState.can_hire_card(card)
-	_style_pixel_button(hire_button, true)
+	_style_notice_button(hire_button, true)
 	hire_button.pressed.connect(_on_hire_pressed.bind(card.id))
 	header.add_child(hire_button)
 
-	var stat_label := _make_label(_format_stats(card.stats), 12)
-	stat_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	var stat_label := _make_ink_label(_format_stats(card.stats), 12)
 	stat_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(stat_label)
 
-	var skill_label := _make_label("Skills: %s" % _format_string_array(card.skill_ids, "None"), 12)
-	skill_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var skill_label := _make_ink_label("스킬: %s" % _format_string_array(card.skill_ids, "없음"), 12, NOTICE_MUTED_INK)
 	skill_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(skill_label)
 
@@ -1309,8 +1358,7 @@ func _make_hire_candidate_row(card: CardDefinition) -> PanelContainer:
 
 
 func _make_shop_card_row(card: CardDefinition, selling: bool) -> PanelContainer:
-	var row := PanelContainer.new()
-	row.add_theme_stylebox_override("panel", _make_pixel_style(PIXEL_PANEL_INLAY_TEXTURE, 8, 12))
+	var row := _make_paper_panel()
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
 	row.add_child(header)
@@ -1318,7 +1366,7 @@ func _make_shop_card_row(card: CardDefinition, selling: bool) -> PanelContainer:
 	var summary := VBoxContainer.new()
 	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(summary)
-	var name_label := _make_label(card.label(), 15)
+	var name_label := _make_ink_label(card.label(), 16)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_child(name_label)
 	var kind := card.equipment_category if card.is_equipment() else "소비 카드"
@@ -1326,7 +1374,7 @@ func _make_shop_card_row(card: CardDefinition, selling: bool) -> PanelContainer:
 		kind = "장비 카드"
 	var equipped := card.is_equipment() and not GameState.get_equipment_owner_id(card.id).is_empty()
 	var detail := "장착 중 · %s" % kind if equipped else kind
-	var detail_label := _make_label("%s · %s" % [detail, _format_stats(card.stats)], 12)
+	var detail_label := _make_ink_label("%s · %s" % [detail, _format_stats(card.stats)], 12, NOTICE_MUTED_INK)
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_child(detail_label)
 
@@ -1340,27 +1388,17 @@ func _make_shop_card_row(card: CardDefinition, selling: bool) -> PanelContainer:
 		button.tooltip_text = "장착을 해제한 뒤 판매할 수 있습니다."
 	elif not selling and button.disabled:
 		button.tooltip_text = "자금이 부족합니다."
-	_style_pixel_button(button, true)
+	_style_notice_button(button, true)
 	button.pressed.connect(_on_shop_trade_pressed.bind(card, selling))
 	header.add_child(button)
 	return row
 
 
-func _make_facility_event_row(facility: int) -> PanelContainer:
-	var event_id := _facility_event_id(facility)
-	var title := GameEnums.facility_label(facility)
-	var is_selected := selected_event_id == event_id
+func _make_facility_event_detail(facility: int) -> VBoxContainer:
 	var character := GameState.get_facility_character(facility)
 	var candidate := ContentCatalog.get_card(facility_candidate_ids.get(facility, &""))
 	var can_open := GameState.is_facility_open(facility)
-	var row := _make_notice_panel(event_id, character != null)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	row.add_child(box)
-	box.add_child(_make_event_title_button(title, event_id, is_selected, character != null))
-	if not is_selected:
-		return row
+	var box := _make_event_detail_body()
 
 	var slot := _make_assignment_slot_button(
 		"내일 담당 인물",
@@ -1403,41 +1441,13 @@ func _make_facility_event_row(facility: int) -> PanelContainer:
 			_style_notice_button(cancel_button, false)
 			cancel_button.pressed.connect(_on_facility_cancel_pressed.bind(facility))
 			actions.add_child(cancel_button)
-	return row
+	return box
 
 
-func _make_event_row(request: RequestDefinition) -> PanelContainer:
-	var event_id := _request_event_id(request)
-	var is_selected := selected_event_id == event_id
-	var is_assignment_complete := GameState.get_daily_request_assigned_character(request) != null
-	var row := _make_notice_panel(event_id, is_assignment_complete)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	row.add_child(box)
-
-	box.add_child(_make_event_title_button(_request_display_title(request), event_id, is_selected, is_assignment_complete))
-
-	if is_selected:
-		box.add_child(_make_request_event_detail(request))
-
-	return row
-
-
-func _make_tax_payment_event_row() -> PanelContainer:
+func _make_tax_payment_event_detail() -> VBoxContainer:
 	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
 	var can_resolve := _can_resolve_tax_event()
-	var is_selected := selected_event_id == TAX_PAYMENT_EVENT_ID
-	var row := _make_notice_panel(TAX_PAYMENT_EVENT_ID, is_paid)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	row.add_child(box)
-
-	box.add_child(_make_event_title_button("세금 납부", TAX_PAYMENT_EVENT_ID, is_selected, is_paid))
-
-	if not is_selected:
-		return row
+	var box := _make_event_detail_body()
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
@@ -1488,24 +1498,15 @@ func _make_tax_payment_event_row() -> PanelContainer:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status_label)
 
-	return row
+	return box
 
 
-func _make_job_training_event_row() -> PanelContainer:
-	var is_selected := selected_event_id == JOB_TRAINING_EVENT_ID
+func _make_job_training_event_detail() -> VBoxContainer:
 	var assigned_character := GameState.get_job_training_character()
 	var candidate_character := ContentCatalog.get_card(job_training_candidate_character_id)
 	var has_pending_change := GameState.has_pending_job_change()
 	var is_assignment_complete := assigned_character != null or has_pending_change
-	var row := _make_notice_panel(JOB_TRAINING_EVENT_ID, is_assignment_complete)
-
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	row.add_child(box)
-	box.add_child(_make_event_title_button("직업 교육소", JOB_TRAINING_EVENT_ID, is_selected, is_assignment_complete))
-
-	if not is_selected:
-		return row
+	var box := _make_event_detail_body()
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
@@ -1567,12 +1568,11 @@ func _make_job_training_event_row() -> PanelContainer:
 	status.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if candidate_character != null or is_assignment_complete else NOTICE_MUTED_INK)
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status)
-	return row
+	return box
 
 
 func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
-	var detail := VBoxContainer.new()
-	detail.add_theme_constant_override("separation", 8)
+	var detail := _make_event_detail_body()
 	var character_id := StringName(daily_request_character_ids.get(request.id, &""))
 	var candidate_character := ContentCatalog.get_card(character_id)
 	var queued_character := GameState.get_daily_request_assigned_character(request)
@@ -1637,28 +1637,27 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	return detail
 
 
-func _make_notice_panel(event_id: StringName, is_complete: bool) -> PanelContainer:
+func _make_event_detail_body() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	return box
+
+
+func _make_event_row(title: String, event_id: StringName, is_complete: bool) -> PanelContainer:
 	var panel := PanelContainer.new()
-	var style := notice_board_art.note
-	if is_complete:
-		style = notice_board_art.completed_note
-	elif selected_event_id == event_id:
-		style = notice_board_art.selected_note
+	var style := notice_board_art.completed_note if is_complete else notice_board_art.note
 	panel.add_theme_stylebox_override("panel", style)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+	panel.add_child(_make_event_title_button(title, event_id, is_complete))
 	return panel
 
 
-func _make_event_title_button(title: String, event_id: StringName, is_selected: bool, is_complete: bool) -> Button:
+func _make_event_title_button(title: String, event_id: StringName, is_complete: bool) -> Button:
 	var button := Button.new()
 	button.text = title
-	button.icon = notice_board_art.pin
-	if is_complete:
-		button.icon = notice_board_art.completed_pin
-	elif is_selected:
-		button.icon = notice_board_art.selected_pin
+	button.icon = notice_board_art.completed_pin if is_complete else notice_board_art.pin
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.custom_minimum_size = Vector2(0, 38)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1668,7 +1667,7 @@ func _make_event_title_button(title: String, event_id: StringName, is_selected: 
 	button.add_theme_constant_override("h_separation", 10)
 	button.add_theme_font_size_override("font_size", 16)
 	_style_clear_button(button)
-	button.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if is_selected or is_complete else NOTICE_INK)
+	button.add_theme_color_override("font_color", NOTICE_ACTIVE_INK if is_complete else NOTICE_INK)
 	button.add_theme_color_override("font_hover_color", NOTICE_ACTIVE_INK)
 	button.add_theme_color_override("font_pressed_color", NOTICE_ACTIVE_INK)
 	button.pressed.connect(_on_event_title_pressed.bind(event_id))
@@ -1723,6 +1722,15 @@ func _style_notice_button(button: Button, primary: bool) -> void:
 	button.add_theme_color_override("font_hover_color", ink)
 	button.add_theme_color_override("font_pressed_color", ink)
 	button.add_theme_color_override("font_disabled_color", NOTICE_MUTED_INK)
+
+
+func _style_notice_tabs(tabs: Control) -> void:
+	tabs.add_theme_stylebox_override("tab_selected", _notice_control_style(Color("#CDD9CC"), Color("#688077")))
+	tabs.add_theme_stylebox_override("tab_unselected", _notice_control_style(Color("#DED5C2"), Color("#A39783")))
+	tabs.add_theme_stylebox_override("tab_hovered", _notice_control_style(Color("#E9E1D0"), Color("#688077")))
+	tabs.add_theme_color_override("font_selected_color", NOTICE_ACTIVE_INK)
+	tabs.add_theme_color_override("font_unselected_color", NOTICE_MUTED_INK)
+	tabs.add_theme_color_override("font_hovered_color", NOTICE_ACTIVE_INK)
 
 
 func _style_notice_slot(button: Button, background: Color, edge: Color, ink: Color) -> void:
@@ -1812,13 +1820,6 @@ func _tax_event_status_color(is_paid: bool, can_resolve: bool) -> Color:
 	return NOTICE_ACTIVE_INK if is_paid or can_resolve else NOTICE_MUTED_INK
 
 
-func _make_empty_label(text: String) -> Label:
-	var label := _make_label(text, 13)
-	label.add_theme_color_override("font_color", Color("#7F8D9B"))
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	return label
-
-
 func _make_icon_button(icon_path: String, tooltip: String) -> Button:
 	var button := Button.new()
 	button.icon = load(icon_path)
@@ -1854,21 +1855,6 @@ func _style_clear_button(button: Button) -> void:
 	button.add_theme_color_override("font_disabled_color", Color("#6F7F8D"))
 
 
-func _style_pixel_button(button: Button, accent: bool) -> void:
-	var normal_texture := PIXEL_BUTTON_ACCENT_TEXTURE if accent else PIXEL_BUTTON_TEXTURE
-	var pressed_texture := PIXEL_BUTTON_ACCENT_PRESSED_TEXTURE if accent else PIXEL_BUTTON_PRESSED_TEXTURE
-	var font_color := Color("#2B2617") if accent else Color("#F3F4F6")
-	button.add_theme_stylebox_override("normal", _make_pixel_style(normal_texture, 8, 8))
-	button.add_theme_stylebox_override("hover", _make_pixel_style(pressed_texture, 8, 8))
-	button.add_theme_stylebox_override("pressed", _make_pixel_style(pressed_texture, 8, 8))
-	button.add_theme_stylebox_override("disabled", _make_empty_style(8))
-	button.add_theme_stylebox_override("focus", _make_empty_style())
-	button.add_theme_color_override("font_color", font_color)
-	button.add_theme_color_override("font_hover_color", font_color)
-	button.add_theme_color_override("font_pressed_color", font_color)
-	button.add_theme_color_override("font_disabled_color", Color("#6F7F8D"))
-
-
 func _make_label(text: String, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -1877,18 +1863,11 @@ func _make_label(text: String, font_size: int) -> Label:
 	return label
 
 
-func _make_section_title(text: String) -> Label:
-	var label := _make_label(text, 20)
-	label.add_theme_color_override("font_color", Color("#F4C95D"))
-	return label
-
-
 func _add_metric(grid: GridContainer, name: String) -> Label:
-	var name_label := _make_label(name, 14)
-	name_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var name_label := _make_ink_label(name, 14, NOTICE_MUTED_INK)
 	grid.add_child(name_label)
 
-	var value_label := _make_label("-", 14)
+	var value_label := _make_ink_label("-", 14)
 	grid.add_child(value_label)
 	return value_label
 
@@ -1951,7 +1930,12 @@ func _can_cancel_tax_event_action() -> bool:
 
 func _refresh_character_cards() -> void:
 	var character_cards := _get_cards_by_type(GameEnums.CardType.CHARACTER)
-	_populate_card_list(character_card_list, character_cards, "No character cards.")
+	_clear_children(character_card_list)
+	if character_cards.is_empty():
+		character_card_list.add_child(_make_ink_label("보유한 인물이 없습니다.", 13, BOARD_TITLE_INK))
+		return
+	for card in character_cards:
+		character_card_list.add_child(_make_character_card_row(card))
 
 
 func _refresh_character_detail_popup() -> void:
@@ -1964,6 +1948,7 @@ func _refresh_character_detail_popup() -> void:
 	if String(selected_character_card_id).is_empty():
 		character_detail_title.text = ""
 		character_detail_popup.visible = false
+		_update_event_board_visibility()
 		return
 
 	var card := ContentCatalog.get_card(selected_character_card_id)
@@ -1971,29 +1956,30 @@ func _refresh_character_detail_popup() -> void:
 		selected_character_card_id = &""
 		character_detail_title.text = ""
 		character_detail_popup.visible = false
+		_update_event_board_visibility()
 		return
 
 	character_detail_popup.visible = true
+	_update_event_board_visibility()
 	character_detail_title.text = card.label()
 
+	var summary_sheet := PanelContainer.new()
+	summary_sheet.add_theme_stylebox_override("panel", notice_board_art.note)
+	character_detail_content.add_child(summary_sheet)
 	var summary := HBoxContainer.new()
 	summary.add_theme_constant_override("separation", 14)
-	character_detail_content.add_child(summary)
+	summary_sheet.add_child(summary)
 
 	summary.add_child(_make_profile_frame(card))
 
 	var summary_text := VBoxContainer.new()
 	summary_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	summary_text.alignment = BoxContainer.ALIGNMENT_CENTER
 	summary_text.add_theme_constant_override("separation", 5)
 	summary.add_child(summary_text)
 
-	var name_label := _make_label(card.label(), 24)
-	name_label.add_theme_color_override("font_color", Color("#F3F4F6"))
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary_text.add_child(name_label)
-
-	var job_label := _make_label("%s / %s" % [_character_species(card), _character_job(card)], 14)
-	job_label.add_theme_color_override("font_color", Color("#AAB6C2"))
+	var job_label := _make_ink_label("%s / %s" % [_character_species(card), _character_job(card)], 16)
+	job_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary_text.add_child(job_label)
 
 	var detail := _make_character_detail(card)
@@ -2012,11 +1998,11 @@ func _refresh_job_change_popup() -> void:
 	job_change_title.text = "%s의 전직" % character.label()
 
 	var current_job_id := GameState.get_character_current_job_id(character)
-	var current_label := _make_label("현재 직업: %s  Lv.%s" % [
+	var current_label := _make_ink_label("현재 직업: %s  Lv.%s" % [
 		_job_label(current_job_id),
 		GameState.get_character_job_level(character, current_job_id),
-	], 13)
-	current_label.add_theme_color_override("font_color", Color("#D7DEE8"))
+	], 13, BOARD_TITLE_INK)
+	current_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	job_change_content.add_child(current_label)
 
 	for job in ContentCatalog.jobs:
@@ -2032,39 +2018,38 @@ func _refresh_settlement_popup() -> void:
 	settlement_popup.visible = true
 	for raw_result in GameState.last_daily_request_results:
 		var result: Dictionary = raw_result
-		var result_panel := _make_panel(Color("#172633"), WINDOW_BORDER_COLOR)
+		var reward := int(result.get("reward", 0))
+		var result_panel := _make_paper_panel(notice_board_art.completed_note if reward > 0 else notice_board_art.note)
 		settlement_content.add_child(result_panel)
 
 		var result_box := VBoxContainer.new()
 		result_box.add_theme_constant_override("separation", 5)
 		result_panel.add_child(result_box)
 
-		var result_title := _make_label("%s · %s" % [
+		var result_title := _make_ink_label("%s · %s" % [
 			result.get("request", "의뢰"),
 			result.get("character", "캐릭터"),
 		], 15)
-		result_title.add_theme_color_override("font_color", Color("#D7DEE8"))
+		result_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		result_box.add_child(result_title)
 
-		var formula := _make_label("D6 %s + %s %s = %s" % [
+		var formula := _make_ink_label("D6 %s + %s %s = %s" % [
 			result.get("die", 0),
 			result.get("stat_name", "주요 능력치"),
 			result.get("stat_value", 0),
 			result.get("total", 0),
-		], 13)
-		formula.add_theme_color_override("font_color", Color("#AAB6C2"))
+		], 13, NOTICE_MUTED_INK)
 		result_box.add_child(formula)
 
 		var outcome := String(result.get("outcome", "실패"))
-		var reward := int(result.get("reward", 0))
-		var outcome_label := _make_label("%s · +%s money" % [outcome, reward], 16)
-		outcome_label.add_theme_color_override("font_color", Color("#F4C95D") if reward > 0 else Color("#8E9AA6"))
+		var outcome_label := _make_ink_label("%s · +%s money" % [outcome, reward], 16, NOTICE_ACTIVE_INK if reward > 0 else NOTICE_MUTED_INK)
 		result_box.add_child(outcome_label)
 
-	var total_label := _make_label("총 정산 금액  +%s money" % _daily_settlement_total_reward(), 20)
+	var total_sheet := _make_paper_panel()
+	settlement_content.add_child(total_sheet)
+	var total_label := _make_ink_label("총 정산 금액  +%s money" % _daily_settlement_total_reward(), 20, NOTICE_ACTIVE_INK)
 	total_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	total_label.add_theme_color_override("font_color", Color("#F4C95D"))
-	settlement_content.add_child(total_label)
+	total_sheet.add_child(total_label)
 
 
 func _daily_settlement_total_reward() -> int:
@@ -2074,9 +2059,11 @@ func _daily_settlement_total_reward() -> int:
 	return total
 
 
-func _make_job_change_option(character: CardDefinition, job: JobDefinition) -> HBoxContainer:
+func _make_job_change_option(character: CardDefinition, job: JobDefinition) -> PanelContainer:
+	var sheet := _make_paper_panel()
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
+	sheet.add_child(row)
 	var can_change := GameState.can_change_character_job(character, job.id)
 	var level := GameState.get_character_job_level(character, job.id)
 	var detail := job.label()
@@ -2085,21 +2072,22 @@ func _make_job_change_option(character: CardDefinition, job: JobDefinition) -> H
 	if not job.is_basic_job():
 		detail += "\n%s" % _job_promotion_requirement_text(character, job)
 
-	var label := _make_label(detail, 13)
+	var label := _make_ink_label(detail, 14, NOTICE_INK if can_change else NOTICE_MUTED_INK)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_color_override("font_color", Color("#D7DEE8") if can_change else Color("#697682"))
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(label)
 
 	var button := Button.new()
 	button.text = "전직" if level == 0 else "직업 변경"
 	button.custom_minimum_size = Vector2(100, 34)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_NONE
 	button.disabled = not can_change
-	_style_pixel_button(button, can_change)
+	_style_notice_button(button, can_change)
 	button.pressed.connect(_on_training_job_selected.bind(job.id))
 	row.add_child(button)
-	return row
+	return sheet
 
 
 func _job_promotion_requirement_text(character: CardDefinition, job: JobDefinition) -> String:
@@ -2125,6 +2113,54 @@ func _refresh_event_list() -> void:
 	var requests := GameState.office.available_requests.duplicate()
 	requests.sort_custom(Callable(self, "_sort_requests_by_label"))
 	_populate_event_list(requests)
+	_refresh_event_detail_popup(requests)
+
+
+func _refresh_event_detail_popup(requests: Array[RequestDefinition]) -> void:
+	_clear_children(event_detail_content)
+	var detail: VBoxContainer
+	var title := ""
+	var is_complete := false
+	if selected_event_id == TAX_PAYMENT_EVENT_ID:
+		title = "세금 납부"
+		is_complete = GameState.tax_manager.has_paid_current_week(GameState.current_day)
+		detail = _make_tax_payment_event_detail()
+	elif selected_event_id == JOB_TRAINING_EVENT_ID:
+		title = "직업 교육소"
+		is_complete = _is_job_training_confirmed()
+		detail = _make_job_training_event_detail()
+	elif not selected_event_id.is_empty():
+		for facility in GameEnums.Facility.values():
+			if selected_event_id == _facility_event_id(facility):
+				title = GameEnums.facility_label(facility)
+				is_complete = GameState.get_facility_character(facility) != null
+				detail = _make_facility_event_detail(facility)
+				break
+		if detail == null:
+			for request in requests:
+				if selected_event_id == _request_event_id(request):
+					title = _request_display_title(request)
+					is_complete = GameState.get_daily_request_assigned_character(request) != null
+					detail = _make_request_event_detail(request)
+					break
+
+	event_detail_popup.visible = detail != null
+	_update_event_board_visibility()
+	if detail == null:
+		selected_event_id = &""
+		return
+	event_detail_title.text = title
+	event_detail_pin.texture = notice_board_art.completed_pin if is_complete else notice_board_art.selected_pin
+	var sheet := notice_board_art.completed_note if is_complete else notice_board_art.selected_note
+	event_detail_sheet.add_theme_stylebox_override("panel", sheet)
+	event_detail_content.add_child(detail)
+
+
+func _update_event_board_visibility() -> void:
+	event_panel.visible = not (
+		event_detail_popup.visible or character_detail_popup.visible
+		or settlement_popup.visible or job_change_popup.visible
+	)
 
 
 func _refresh_inventory_drawer() -> void:
@@ -2159,7 +2195,7 @@ func _refresh_inventory_drawer() -> void:
 		inventory_drawer_title.text = _equipment_drawer_title()
 		_populate_equipment_card_list()
 	elif active_drawer_type == Drawer.CONSUMABLE:
-		inventory_drawer_title.text = "Consumable Cards"
+		inventory_drawer_title.text = "소비 카드"
 		_populate_consumable_card_list()
 
 
@@ -2168,28 +2204,22 @@ func _refresh_inventory_buttons() -> void:
 	consumable_button.modulate = Color("#F4C95D") if active_drawer_type == Drawer.CONSUMABLE else Color.WHITE
 
 
-func _populate_card_list(container: VBoxContainer, cards: Array[CardDefinition], empty_text: String) -> void:
-	_clear_children(container)
-
-	if cards.is_empty():
-		container.add_child(_make_empty_label(empty_text))
-		return
-
-	for card in cards:
-		container.add_child(_make_card_row(card))
-
-
-func _populate_event_list(requests: Array) -> void:
+func _populate_event_list(requests: Array[RequestDefinition]) -> void:
 	_clear_children(event_list)
-	event_list.add_child(_make_tax_payment_event_row())
-	event_list.add_child(_make_job_training_event_row())
+	event_list.add_child(_make_event_row("세금 납부", TAX_PAYMENT_EVENT_ID, GameState.tax_manager.has_paid_current_week(GameState.current_day)))
+	event_list.add_child(_make_event_row("직업 교육소", JOB_TRAINING_EVENT_ID, _is_job_training_confirmed()))
 
 	for request in requests:
-		if request is RequestDefinition:
-			event_list.add_child(_make_event_row(request))
+		var is_complete := GameState.get_daily_request_assigned_character(request) != null
+		event_list.add_child(_make_event_row(_request_display_title(request), _request_event_id(request), is_complete))
 
-	event_list.add_child(_make_facility_event_row(GameEnums.Facility.SHOP))
-	event_list.add_child(_make_facility_event_row(GameEnums.Facility.PERSONNEL))
+	for facility in GameEnums.Facility.values():
+		var is_complete := GameState.get_facility_character(facility) != null
+		event_list.add_child(_make_event_row(GameEnums.facility_label(facility), _facility_event_id(facility), is_complete))
+
+
+func _is_job_training_confirmed() -> bool:
+	return GameState.get_job_training_character() != null or GameState.has_pending_job_change()
 
 
 func _populate_hire_candidate_list() -> void:
@@ -2197,7 +2227,7 @@ func _populate_hire_candidate_list() -> void:
 	var candidates := _get_hire_candidates()
 
 	if candidates.is_empty():
-		inventory_card_list.add_child(_make_empty_label("오늘은 고용할 수 있는 인물이 없습니다."))
+		inventory_card_list.add_child(_make_ink_label("오늘은 고용할 수 있는 인물이 없습니다.", 13, BOARD_TITLE_INK))
 		return
 
 	for card in candidates:
@@ -2210,7 +2240,7 @@ func _populate_shop_card_list() -> void:
 	var cards := GameState.get_shop_cards(selling)
 	cards.sort_custom(Callable(self, "_sort_cards_by_label"))
 	if cards.is_empty():
-		inventory_card_list.add_child(_make_empty_label("판매할 카드가 없습니다." if selling else "구매할 카드가 없습니다."))
+		inventory_card_list.add_child(_make_ink_label("판매할 카드가 없습니다." if selling else "구매할 카드가 없습니다.", 13, BOARD_TITLE_INK))
 		return
 	for card in cards:
 		inventory_card_list.add_child(_make_shop_card_row(card, selling))
@@ -2220,7 +2250,7 @@ func _populate_assignment_candidate_list() -> void:
 	_clear_children(inventory_card_list)
 	var characters := _get_cards_by_type(GameEnums.CardType.CHARACTER)
 	if characters.is_empty():
-		inventory_card_list.add_child(_make_empty_label("배치할 수 있는 캐릭터가 없습니다."))
+		inventory_card_list.add_child(_make_ink_label("배치할 수 있는 인물이 없습니다.", 13, BOARD_TITLE_INK))
 		return
 
 	for card in characters:
@@ -2235,8 +2265,8 @@ func _populate_equipment_card_list() -> void:
 		equipment_cards = _get_available_equipment_cards()
 
 	if equipment_cards.is_empty():
-		var empty_text := "No available equipment." if not String(equipment_target_character_id).is_empty() else "No equipment cards."
-		inventory_card_list.add_child(_make_empty_label(empty_text))
+		var empty_text := "장착할 수 있는 장비가 없습니다." if not equipment_target_character_id.is_empty() else "보유 장비가 없습니다."
+		inventory_card_list.add_child(_make_ink_label(empty_text, 13, BOARD_TITLE_INK))
 		return
 
 	for card in equipment_cards:
@@ -2249,7 +2279,7 @@ func _populate_consumable_card_list() -> void:
 
 	var consumable_cards := _get_cards_by_type(GameEnums.CardType.CONSUMABLE)
 	if consumable_cards.is_empty():
-		inventory_card_list.add_child(_make_empty_label("No consumable cards."))
+		inventory_card_list.add_child(_make_ink_label("보유 소비 카드가 없습니다.", 13, BOARD_TITLE_INK))
 		return
 
 	for card in consumable_cards:
@@ -2259,9 +2289,9 @@ func _populate_consumable_card_list() -> void:
 func _equipment_drawer_title() -> String:
 	var character := ContentCatalog.get_card(equipment_target_character_id)
 	if character != null:
-		return "Choose Equipment for %s" % character.label()
+		return "%s · 장비 선택" % character.label()
 
-	return "Equipment Cards"
+	return "장비 카드"
 
 
 func _get_cards_by_type(card_type: int) -> Array[CardDefinition]:
@@ -2542,18 +2572,23 @@ func _on_event_row_gui_input(event: InputEvent, event_id: StringName) -> void:
 
 
 func _toggle_event_detail(event_id: StringName) -> void:
-	is_selecting_tax_event_money = false
-	if event_id != JOB_TRAINING_EVENT_ID:
-		is_selecting_job_training_character = false
-
 	if selected_event_id == event_id:
-		selected_event_id = &""
-	else:
-		selected_event_id = event_id
+		_close_event_detail()
+		return
 
+	selected_event_id = event_id
+	selected_character_card_id = &""
+	_refresh_character_cards()
+	_refresh_character_detail_popup()
 	_refresh_event_list()
-	_refresh_inventory_drawer()
-	_refresh_inventory_buttons()
+	event_detail_scroll.scroll_vertical = 0
+
+
+func _close_event_detail() -> void:
+	selected_event_id = &""
+	if active_drawer_type == Drawer.CHARACTER_PICKER or is_selecting_tax_event_money:
+		_close_inventory_drawer()
+	_refresh_event_list()
 
 
 func _on_reset_pressed() -> void:
@@ -2836,9 +2871,7 @@ func _on_job_training_execute_pressed() -> void:
 
 
 func _on_training_job_selected(job_id: StringName) -> void:
-	if GameState.complete_job_training(job_id):
-		selected_event_id = JOB_TRAINING_EVENT_ID
-		_refresh()
+	GameState.complete_job_training(job_id)
 
 
 func _open_inventory_drawer(drawer_type: int) -> void:
@@ -2884,10 +2917,23 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("ui_cancel") or player_creation_overlay.visible:
+		return
+	if active_drawer_type != Drawer.CLOSED:
+		_dismiss_inventory_drawer()
+	elif event_detail_popup.visible and not settlement_popup.visible and not job_change_popup.visible:
+		_close_event_detail()
+	else:
+		return
+	get_viewport().set_input_as_handled()
+
+
 func _is_inventory_drawer_click(position: Vector2) -> bool:
 	return (
 		_is_point_in_control(inventory_drawer, position)
 		or _is_point_in_control(character_detail_popup, position)
+		or _is_point_in_control(event_detail_close_button, position)
 		or _is_point_in_control(equipment_button, position)
 		or _is_point_in_control(consumable_button, position)
 		or _is_point_in_control(next_day_button, position)
@@ -2935,6 +2981,8 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 				selected_character_card_id = &""
 			else:
 				selected_character_card_id = card_id
+				if not selected_event_id.is_empty():
+					_close_event_detail()
 
 			_refresh_character_cards()
 			_refresh_character_detail_popup()

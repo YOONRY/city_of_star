@@ -10,6 +10,8 @@ var completed_note: StyleBoxTexture
 var pin: Texture2D
 var selected_pin: Texture2D
 var completed_pin: Texture2D
+var check_off: Texture2D
+var check_on: Texture2D
 
 
 func _init() -> void:
@@ -20,6 +22,8 @@ func _init() -> void:
 	pin = _make_pin(Color("#A15846"))
 	selected_pin = _make_pin(Color("#376F69"))
 	completed_pin = _make_pin(Color("#477653"), true)
+	check_off = _make_checkbox(false)
+	check_on = _make_checkbox(true)
 
 
 func _make_board() -> StyleBoxTexture:
@@ -76,13 +80,24 @@ func _make_pin(color: Color, completed: bool = false) -> Texture2D:
 	pixels.fill_rect(Rect2i(2, 4, 12, 8), Color("#43382F"))
 	pixels.fill_rect(Rect2i(4, 4, 8, 8), color)
 	if completed:
-		pixels.fill_rect(Rect2i(4, 7, 2, 2), Color("#F0EBDD"))
-		pixels.fill_rect(Rect2i(6, 9, 2, 2), Color("#F0EBDD"))
-		pixels.fill_rect(Rect2i(8, 7, 2, 2), Color("#F0EBDD"))
-		pixels.fill_rect(Rect2i(10, 5, 2, 2), Color("#F0EBDD"))
+		_draw_checkmark(pixels)
 	else:
 		pixels.fill_rect(Rect2i(5, 5, 4, 2), color.lightened(0.48))
 	return ImageTexture.create_from_image(pixels)
+
+
+func _make_checkbox(checked: bool) -> Texture2D:
+	var pixels := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
+	pixels.fill_rect(Rect2i(1, 1, 14, 14), Color("#526C62") if checked else Color("#897B68"))
+	pixels.fill_rect(Rect2i(2, 2, 12, 12), Color("#39645D") if checked else Color("#F5ECDD"))
+	if checked:
+		_draw_checkmark(pixels)
+	return ImageTexture.create_from_image(pixels)
+
+
+func _draw_checkmark(pixels: Image) -> void:
+	for point in [Vector2i(4, 7), Vector2i(6, 9), Vector2i(8, 7), Vector2i(10, 5)]:
+		pixels.fill_rect(Rect2i(point, Vector2i(2, 2)), Color("#F0EBDD"))
 
 
 func _nine_slice(pixels: Image, margin: int, horizontal_padding: int, vertical_padding: int) -> StyleBoxTexture:
