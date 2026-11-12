@@ -7,6 +7,8 @@ signal tax_due(amount: int)
 signal game_over(reason: String)
 signal job_training_completed(character_id: StringName)
 
+enum DungeonStatus { AVAILABLE, SCHEDULED, EXPLORING, RETURNING, CLEARED }
+
 const STARTING_MONEY := 100
 const STARTING_WEEKLY_TAX := 80
 const TAX_DUE_WEEKDAY := 7
@@ -21,6 +23,9 @@ const PLAYER_GROWTH_MAX_PER_STAT := 90
 const PLAYER_INITIAL_SKILL_COUNT := 2
 const DAILY_REQUEST_TAG := "daily_request"
 const DAILY_INCOME_TAG := "daily_income"
+const DUNGEON_TITLE := "폐수로 조사"
+const DUNGEON_PARTY_LIMIT := 3
+const DUNGEON_CLEAR_REWARD := 40
 const RECRUIT_FIRST_NAMES := ["아린", "세라", "레온", "미라", "카인", "루나", "테오", "니아", "로웬", "엘라", "다온", "유리"]
 const RECRUIT_LAST_NAMES := ["베일", "노바", "하트", "렌", "크로우", "스톤", "리프", "문", "애쉬", "스타"]
 const RECRUIT_PERSONAL_SKILLS := ["침착", "근면", "직감", "협동", "집중", "생존술", "응급 대응", "거리 감각"]
@@ -51,6 +56,11 @@ var daily_request_assignments: Dictionary = {}
 var last_daily_request_results: Array[Dictionary] = []
 var facility_assignments: Dictionary = {}
 var available_facilities: Array[int] = []
+var dungeon_status: DungeonStatus = DungeonStatus.AVAILABLE
+var dungeon_party_ids: Array[StringName] = []
+var dungeon_due_day: int = 0
+var dungeon_run: DungeonRun
+var dungeon_outcome: DungeonRun.Result = DungeonRun.Result.ACTIVE
 
 func _ready() -> void:
 	recruit_rng.randomize()
@@ -81,6 +91,11 @@ func reset_game() -> void:
 	last_daily_request_results.clear()
 	facility_assignments.clear()
 	available_facilities.clear()
+	dungeon_status = DungeonStatus.AVAILABLE
+	dungeon_party_ids.clear()
+	dungeon_due_day = 0
+	dungeon_run = null
+	dungeon_outcome = DungeonRun.Result.ACTIVE
 	_refresh_hire_candidates()
 	_refresh_daily_requests()
 	_clear_last_tax_payment()
@@ -88,7 +103,7 @@ func reset_game() -> void:
 
 
 func advance_day() -> void:
-	if is_game_over or has_pending_job_change() or not has_player_character():
+	if is_game_over or has_pending_job_change() or not has_player_character() or dungeon_status == DungeonStatus.EXPLORING or is_dungeon_ready():
 		return
 
 	if tax_manager.is_due(current_day) and not tax_manager.has_paid_current_week(current_day):
@@ -97,6 +112,7 @@ func advance_day() -> void:
 
 	_settle_queued_daily_requests()
 	current_day += 1
+	_complete_dungeon_return()
 	available_facilities.assign(facility_assignments.keys())
 	facility_assignments.clear()
 	_refresh_hire_candidates()
@@ -366,6 +382,8 @@ func get_character_event_assignment(character: CardDefinition) -> String:
 
 	if job_training_character_id == character.id or pending_job_change_character_id == character.id:
 		return "직업 교육소"
+	if dungeon_party_ids.has(character.id):
+		return "%s (복귀 중)" % DUNGEON_TITLE if dungeon_status == DungeonStatus.RETURNING else DUNGEON_TITLE
 
 	for facility in facility_assignments:
 		if facility_assignments[facility] == character.id:
@@ -377,6 +395,97 @@ func get_character_event_assignment(character: CardDefinition) -> String:
 		var request := ContentCatalog.get_request(StringName(raw_request_id))
 		return request.label() if request != null else String(raw_request_id)
 	return ""
+
+
+func can_add_dungeon_member(character: CardDefinition) -> bool:
+	return (
+		dungeon_status == DungeonStatus.AVAILABLE
+		and not is_game_over
+		and not has_pending_job_change()
+		and character != null
+		and character.is_character()
+		and office.owned_cards.has(character)
+		and get_character_event_assignment(character).is_empty()
+	)
+
+
+func can_schedule_dungeon(party: Array[StringName]) -> bool:
+	if party.is_empty() or party.size() > DUNGEON_PARTY_LIMIT:
+		return false
+	var unique := {}
+	for id in party:
+		if unique.has(id) or not can_add_dungeon_member(ContentCatalog.get_card(id)):
+			return false
+		unique[id] = true
+	return true
+
+
+func schedule_dungeon(party: Array[StringName]) -> bool:
+	if not can_schedule_dungeon(party):
+		return false
+	dungeon_party_ids.assign(party)
+	dungeon_due_day = current_day + 1
+	dungeon_status = DungeonStatus.SCHEDULED
+	dungeon_outcome = DungeonRun.Result.ACTIVE
+	state_changed.emit()
+	return true
+
+
+func cancel_dungeon_assignment() -> bool:
+	if dungeon_status != DungeonStatus.SCHEDULED or current_day >= dungeon_due_day:
+		return false
+	dungeon_party_ids.clear()
+	dungeon_due_day = 0
+	dungeon_status = DungeonStatus.AVAILABLE
+	state_changed.emit()
+	return true
+
+
+func is_dungeon_ready() -> bool:
+	return dungeon_status == DungeonStatus.SCHEDULED and current_day >= dungeon_due_day and not is_game_over and not has_pending_job_change()
+
+
+func begin_dungeon() -> DungeonRun:
+	if not is_dungeon_ready():
+		return null
+	var run := DungeonRun.new()
+	for id in dungeon_party_ids:
+		var character := ContentCatalog.get_card(id)
+		if character != null and office.owned_cards.has(character):
+			run.add_ally(character.label(), get_effective_stats(character))
+	if run.allies.is_empty():
+		dungeon_party_ids.clear()
+		dungeon_due_day = 0
+		dungeon_status = DungeonStatus.AVAILABLE
+		state_changed.emit()
+		return null
+	dungeon_run = run
+	dungeon_status = DungeonStatus.EXPLORING
+	state_changed.emit()
+	return run
+
+
+func finish_dungeon() -> bool:
+	if dungeon_status != DungeonStatus.EXPLORING or dungeon_run == null or dungeon_run.result == DungeonRun.Result.ACTIVE:
+		return false
+	dungeon_outcome = dungeon_run.result
+	dungeon_run = null
+	dungeon_due_day = current_day + 1
+	dungeon_status = DungeonStatus.RETURNING
+	state_changed.emit()
+	return true
+
+
+func _complete_dungeon_return() -> void:
+	if dungeon_status != DungeonStatus.RETURNING or current_day < dungeon_due_day:
+		return
+	dungeon_party_ids.clear()
+	dungeon_due_day = 0
+	if dungeon_outcome == DungeonRun.Result.CLEARED:
+		dungeon_status = DungeonStatus.CLEARED
+		office.money += DUNGEON_CLEAR_REWARD
+	else:
+		dungeon_status = DungeonStatus.AVAILABLE
 
 
 func get_daily_request_primary_stats(request: RequestDefinition) -> PackedStringArray:

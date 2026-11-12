@@ -5,6 +5,8 @@ enum Drawer { CLOSED, CHARACTER_PICKER, EQUIPMENT, CONSUMABLE, SHOP, PERSONNEL }
 const NO_FACILITY := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
 const JOB_TRAINING_EVENT_ID := &"job_training"
+const DUNGEON_EVENT_ID := &"dungeon_expedition"
+const DUNGEON_SCENE := preload("res://scenes/dungeon/dungeon.tscn")
 const NOTICE_INK := Color("#2E2A24")
 const NOTICE_MUTED_INK := Color("#554D40")
 const NOTICE_ACTIVE_INK := Color("#245951")
@@ -58,6 +60,9 @@ var active_drawer_type: int = Drawer.CLOSED
 var facility_assignment_target: int = NO_FACILITY
 var facility_candidate_ids: Dictionary = {}
 var facility_open_queue: Array[int] = []
+var dungeon_screen: DungeonScreen
+var dungeon_candidate_ids: Array[StringName] = []
+var is_selecting_dungeon_character := false
 var selected_event_id: StringName = &""
 var selected_character_card_id: StringName = &""
 var equipment_target_character_id: StringName = &""
@@ -1444,6 +1449,80 @@ func _make_facility_event_detail(facility: int) -> VBoxContainer:
 	return box
 
 
+func _make_dungeon_event_detail() -> VBoxContainer:
+	var box := _make_event_detail_body()
+	box.add_child(_make_ink_label("폐수로 1층 · 전투 2회 · 클리어 보상 %s money" % GameState.DUNGEON_CLEAR_REWARD, 14, NOTICE_MUTED_INK))
+	var status := GameState.dungeon_status
+	var party := dungeon_candidate_ids if status == GameState.DungeonStatus.AVAILABLE else GameState.dungeon_party_ids
+	if status == GameState.DungeonStatus.RETURNING or status == GameState.DungeonStatus.CLEARED:
+		var outcome := "조사 완료"
+		if GameState.dungeon_outcome == DungeonRun.Result.RETREATED:
+			outcome = "탐사 철수"
+		elif GameState.dungeon_outcome == DungeonRun.Result.DEFEATED:
+			outcome = "탐사 실패"
+		if status == GameState.DungeonStatus.RETURNING:
+			outcome += " · Day %s 복귀 예정" % GameState.dungeon_due_day
+		box.add_child(_make_ink_label(outcome, 16, NOTICE_ACTIVE_INK))
+	elif status == GameState.DungeonStatus.SCHEDULED:
+		box.add_child(_make_ink_label("Day %s 출발 예정" % GameState.dungeon_due_day, 16, NOTICE_ACTIVE_INK))
+	elif status == GameState.DungeonStatus.EXPLORING:
+		box.add_child(_make_ink_label("탐사 중", 16, NOTICE_ACTIVE_INK))
+
+	for id in party:
+		var character := ContentCatalog.get_card(id)
+		if character == null:
+			continue
+		var member_row := HBoxContainer.new()
+		member_row.add_theme_constant_override("separation", 10)
+		box.add_child(member_row)
+		var name_label := _make_ink_label(character.label(), 16)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		member_row.add_child(name_label)
+		if status == GameState.DungeonStatus.AVAILABLE:
+			var remove_button := _make_close_button()
+			remove_button.tooltip_text = "탐사대에서 제외"
+			_style_notice_button(remove_button, false)
+			remove_button.pressed.connect(_remove_dungeon_candidate.bind(id))
+			member_row.add_child(remove_button)
+	if status == GameState.DungeonStatus.AVAILABLE:
+		var slot := _make_assignment_slot_button("탐사 인원", "%s/%s" % [party.size(), GameState.DUNGEON_PARTY_LIMIT], not party.is_empty(), false, _choose_dungeon_character)
+		slot.disabled = party.size() >= GameState.DUNGEON_PARTY_LIMIT or GameState.is_game_over
+		box.add_child(slot)
+		var confirm := Button.new()
+		confirm.text = "배치 확정"
+		confirm.disabled = not GameState.can_schedule_dungeon(dungeon_candidate_ids)
+		_style_notice_button(confirm, true)
+		confirm.pressed.connect(_confirm_dungeon_party)
+		box.add_child(confirm)
+	elif status == GameState.DungeonStatus.SCHEDULED and GameState.current_day < GameState.dungeon_due_day:
+		var cancel := Button.new()
+		cancel.text = "배치 취소"
+		_style_notice_button(cancel, false)
+		cancel.pressed.connect(GameState.cancel_dungeon_assignment)
+		box.add_child(cancel)
+	return box
+
+
+func _choose_dungeon_character() -> void:
+	if GameState.dungeon_status != GameState.DungeonStatus.AVAILABLE or dungeon_candidate_ids.size() >= GameState.DUNGEON_PARTY_LIMIT:
+		return
+	_close_inventory_drawer()
+	is_selecting_dungeon_character = true
+	_open_inventory_drawer(Drawer.CHARACTER_PICKER)
+
+
+func _remove_dungeon_candidate(id: StringName) -> void:
+	dungeon_candidate_ids.erase(id)
+	_refresh()
+
+
+func _confirm_dungeon_party() -> void:
+	if GameState.schedule_dungeon(dungeon_candidate_ids):
+		dungeon_candidate_ids.clear()
+		_refresh()
+
+
 func _make_tax_payment_event_detail() -> VBoxContainer:
 	var is_paid := GameState.tax_manager.has_paid_current_week(GameState.current_day)
 	var can_resolve := _can_resolve_tax_event()
@@ -1873,6 +1952,10 @@ func _add_metric(grid: GridContainer, name: String) -> Label:
 
 
 func _refresh() -> void:
+	if dungeon_screen != null and GameState.dungeon_run != dungeon_screen.run:
+		dungeon_screen.hide()
+		dungeon_screen.queue_free()
+		dungeon_screen = null
 	_sync_tax_event_state()
 	day_value.text = "Day %s" % GameState.current_day
 
@@ -1882,7 +1965,10 @@ func _refresh() -> void:
 		and not GameState.is_game_over
 	)
 	var has_open_settlement := not settlement_results_dismissed and not GameState.last_daily_request_results.is_empty()
-	next_day_button.disabled = GameState.is_game_over or GameState.has_pending_job_change() or not GameState.has_player_character() or has_open_settlement
+	next_day_button.disabled = (
+		GameState.is_game_over or GameState.has_pending_job_change() or not GameState.has_player_character()
+		or has_open_settlement or GameState.is_dungeon_ready() or GameState.dungeon_run != null
+	)
 	_refresh_player_creation_form()
 	_refresh_character_cards()
 	_refresh_character_detail_popup()
@@ -1891,7 +1977,7 @@ func _refresh() -> void:
 	_refresh_event_list()
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
-	_show_next_facility()
+	_show_next_day_activity()
 
 	if GameState.is_game_over:
 		status_label.text = "Game Over: %s" % GameState.game_over_reason
@@ -2129,6 +2215,10 @@ func _refresh_event_detail_popup(requests: Array[RequestDefinition]) -> void:
 		title = "직업 교육소"
 		is_complete = _is_job_training_confirmed()
 		detail = _make_job_training_event_detail()
+	elif selected_event_id == DUNGEON_EVENT_ID:
+		title = GameState.DUNGEON_TITLE
+		is_complete = GameState.dungeon_status != GameState.DungeonStatus.AVAILABLE
+		detail = _make_dungeon_event_detail()
 	elif not selected_event_id.is_empty():
 		for facility in GameEnums.Facility.values():
 			if selected_event_id == _facility_event_id(facility):
@@ -2178,7 +2268,9 @@ func _refresh_inventory_drawer() -> void:
 		facility_balance_label.text = "보유 자금: %s" % GameState.office.money
 
 	if active_drawer_type == Drawer.CHARACTER_PICKER:
-		if facility_assignment_target != NO_FACILITY:
+		if is_selecting_dungeon_character:
+			inventory_drawer_title.text = "탐사 인원 선택"
+		elif facility_assignment_target != NO_FACILITY:
 			inventory_drawer_title.text = "%s 담당 인물 선택" % GameEnums.facility_label(facility_assignment_target)
 		elif not String(request_assignment_target_id).is_empty():
 			inventory_drawer_title.text = "의뢰 담당 인물 선택"
@@ -2208,6 +2300,7 @@ func _populate_event_list(requests: Array[RequestDefinition]) -> void:
 	_clear_children(event_list)
 	event_list.add_child(_make_event_row("세금 납부", TAX_PAYMENT_EVENT_ID, GameState.tax_manager.has_paid_current_week(GameState.current_day)))
 	event_list.add_child(_make_event_row("직업 교육소", JOB_TRAINING_EVENT_ID, _is_job_training_confirmed()))
+	event_list.add_child(_make_event_row(GameState.DUNGEON_TITLE, DUNGEON_EVENT_ID, GameState.dungeon_status != GameState.DungeonStatus.AVAILABLE))
 
 	for request in requests:
 		var is_complete := GameState.get_daily_request_assigned_character(request) != null
@@ -2376,6 +2469,8 @@ func _character_event_assignment_label(card: CardDefinition) -> String:
 		return "직업 교육소 (배치 대기)"
 
 	if card != null:
+		if dungeon_candidate_ids.has(card.id):
+			return "%s (배치 대기)" % GameState.DUNGEON_TITLE
 		for facility in facility_candidate_ids:
 			if facility_candidate_ids[facility] == card.id:
 				return "%s (배치 대기)" % GameEnums.facility_label(facility)
@@ -2554,6 +2649,7 @@ func _on_next_day_pressed() -> void:
 func _on_day_advanced(_day: int) -> void:
 	daily_request_character_ids.clear()
 	facility_candidate_ids.clear()
+	dungeon_candidate_ids.clear()
 	facility_open_queue = GameState.available_facilities.duplicate()
 	settlement_results_dismissed = false
 	selected_event_id = &""
@@ -2602,6 +2698,7 @@ func _on_reset_pressed() -> void:
 	daily_request_character_ids.clear()
 	facility_candidate_ids.clear()
 	facility_open_queue.clear()
+	dungeon_candidate_ids.clear()
 	request_assignment_target_id = &""
 	settlement_results_dismissed = false
 	_reset_player_creation_form()
@@ -2713,8 +2810,8 @@ func _on_facility_cancel_pressed(facility: int) -> void:
 		GameState.cancel_facility_assignment(facility)
 
 
-func _show_next_facility() -> void:
-	if active_drawer_type != Drawer.CLOSED or GameState.has_pending_job_change() or settlement_popup.visible:
+func _show_next_day_activity() -> void:
+	if dungeon_screen != null or active_drawer_type != Drawer.CLOSED or GameState.has_pending_job_change() or settlement_popup.visible:
 		return
 
 	while not facility_open_queue.is_empty():
@@ -2722,6 +2819,20 @@ func _show_next_facility() -> void:
 		if GameState.is_facility_open(facility):
 			_on_facility_open_pressed(facility)
 			return
+	if GameState.is_dungeon_ready():
+		var run := GameState.begin_dungeon()
+		if run != null:
+			dungeon_screen = DUNGEON_SCENE.instantiate() as DungeonScreen
+			dungeon_screen.run = run
+			dungeon_screen.art = notice_board_art
+			dungeon_screen.z_index = 110
+			dungeon_screen.finished.connect(_on_dungeon_finished)
+			add_child(dungeon_screen)
+
+
+func _on_dungeon_finished() -> void:
+	selected_event_id = DUNGEON_EVENT_ID
+	GameState.finish_dungeon()
 
 
 func _on_facility_open_pressed(facility: int) -> void:
@@ -2880,6 +2991,7 @@ func _open_inventory_drawer(drawer_type: int) -> void:
 		facility_assignment_target = NO_FACILITY
 		request_assignment_target_id = &""
 		is_selecting_job_training_character = false
+		is_selecting_dungeon_character = false
 
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
@@ -2891,6 +3003,7 @@ func _close_inventory_drawer() -> void:
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	is_selecting_job_training_character = false
+	is_selecting_dungeon_character = false
 	request_assignment_target_id = &""
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
@@ -2898,11 +3011,11 @@ func _close_inventory_drawer() -> void:
 
 func _dismiss_inventory_drawer() -> void:
 	_close_inventory_drawer()
-	_show_next_facility()
+	_show_next_day_activity()
 
 
 func _input(event: InputEvent) -> void:
-	if active_drawer_type == Drawer.CLOSED:
+	if dungeon_screen != null or active_drawer_type == Drawer.CLOSED:
 		return
 
 	if event is InputEventMouseButton:
@@ -2918,7 +3031,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("ui_cancel") or player_creation_overlay.visible:
+	if dungeon_screen != null or not event.is_action_pressed("ui_cancel") or player_creation_overlay.visible:
 		return
 	if active_drawer_type != Drawer.CLOSED:
 		_dismiss_inventory_drawer()
@@ -2948,6 +3061,14 @@ func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> voi
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			if is_selecting_dungeon_character:
+				var character := ContentCatalog.get_card(card_id)
+				if dungeon_candidate_ids.size() < GameState.DUNGEON_PARTY_LIMIT and _character_event_assignment_label(character).is_empty() and GameState.can_add_dungeon_member(character):
+					dungeon_candidate_ids.append(card_id)
+					_close_inventory_drawer()
+					_refresh()
+				return
+
 			if facility_assignment_target != NO_FACILITY:
 				var facility := facility_assignment_target
 				var character := ContentCatalog.get_card(card_id)

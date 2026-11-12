@@ -354,7 +354,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "적 1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 2
     },
     {
@@ -405,7 +405,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "영역 2X2",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 2
     },
     {
@@ -456,7 +456,7 @@
       ],
       "required_equipment": "마법 장비",
       "target_text": "영역 1X3",
-      "main_stat": "지능",
+      "main_stat": "지능1.2",
       "damage_type": 2
     },
     {
@@ -507,7 +507,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "적 전체",
-      "main_stat": "지능",
+      "main_stat": "지능1.5",
       "damage_type": 2
     },
     {
@@ -524,7 +524,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "적 1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 2
     },
     {
@@ -541,7 +541,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "아군 1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 0
     },
     {
@@ -575,7 +575,7 @@
       ],
       "required_equipment": "",
       "target_text": "아군 1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 2
     },
     {
@@ -609,7 +609,7 @@
       ],
       "required_equipment": "마법 장비",
       "target_text": "아군 2명",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 0
     },
     {
@@ -626,7 +626,7 @@
       ],
       "required_equipment": "마법 장비",
       "target_text": "적 1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 0
     },
     {
@@ -658,7 +658,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "적1체",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 2
     },
     {
@@ -673,7 +673,7 @@
       ],
       "required_equipment": "마법장비",
       "target_text": "아군",
-      "main_stat": "지능",
+      "main_stat": "지능1.0",
       "damage_type": 0
     },
     {
@@ -688,7 +688,7 @@
       ],
       "required_equipment": "근접 무기",
       "target_text": "적 1체",
-      "main_stat": "민첩",
+      "main_stat": "민첩1.0",
       "damage_type": 1
     },
     {
@@ -721,7 +721,7 @@
       ],
       "required_equipment": "",
       "target_text": "적 1체",
-      "main_stat": "민첩",
+      "main_stat": "민첩1.0",
       "damage_type": 1
     },
     {
@@ -913,6 +913,87 @@
       "target_text": "적 1,2열 1체",
       "main_stat": "민첩 1.0",
       "damage_type": 1
+    },
+    {
+      "id": 56,
+      "display_name": "인재확보",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "인력 사무소에 배치되었을때 인재 목록이 1명 늘어난다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 57,
+      "display_name": "가속",
+      "skill_type_id": 1,
+      "ap_cost": 3,
+      "effect_text": "아군 전체의 민첩을 4높인다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "아군 전체",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 58,
+      "display_name": "매력적임",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "매력이 5만큼 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 59,
+      "display_name": "금전감각",
+      "skill_type_id": 2,
+      "ap_cost": null,
+      "effect_text": "탐험시 골드 획득량이 20% 증가한다",
+      "usable_columns": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "required_equipment": "",
+      "target_text": "자신",
+      "main_stat": "",
+      "damage_type": 0
+    },
+    {
+      "id": 60,
+      "display_name": "행운의 노래",
+      "skill_type_id": 1,
+      "ap_cost": 2,
+      "effect_text": "아군의 획득 경험치가 2배가 된다",
+      "usable_columns": [
+        3,
+        4
+      ],
+      "required_equipment": "근접 무기",
+      "target_text": "아군 전체",
+      "main_stat": "",
+      "damage_type": 0
     }
   ],
   "jobs": [
@@ -1216,6 +1297,31 @@
       "job_id": "Trickster",
       "skill_id": 55,
       "unlock_level": 5
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 56,
+      "unlock_level": 6
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 57,
+      "unlock_level": 7
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 58,
+      "unlock_level": 8
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 59,
+      "unlock_level": 9
+    },
+    {
+      "job_id": "Trickster",
+      "skill_id": 60,
+      "unlock_level": 10
     }
   ]
 }
