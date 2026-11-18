@@ -6,6 +6,7 @@ const NO_FACILITY := -1
 const TAX_PAYMENT_EVENT_ID := &"tax_payment"
 const JOB_TRAINING_EVENT_ID := &"job_training"
 const DUNGEON_EVENT_ID := &"dungeon_expedition"
+const CHARACTER_DRAG_KEY := &"office_character_id"
 const DUNGEON_SCENE := preload("res://scenes/dungeon/dungeon.tscn")
 const NOTICE_INK := Color("#2E2A24")
 const NOTICE_MUTED_INK := Color("#554D40")
@@ -54,6 +55,9 @@ var inventory_card_list: VBoxContainer
 var facility_balance_label: Label
 var shop_tabs: TabBar
 var inventory_scroll: ScrollContainer
+var dungeon_picker_footer: HBoxContainer
+var dungeon_picker_count: Label
+var dungeon_picker_done: Button
 var equipment_button: Button
 var consumable_button: Button
 var active_drawer_type: int = Drawer.CLOSED
@@ -63,6 +67,7 @@ var facility_open_queue: Array[int] = []
 var dungeon_screen: DungeonScreen
 var dungeon_candidate_ids: Array[StringName] = []
 var is_selecting_dungeon_character := false
+var dungeon_picker_slot := -1
 var selected_event_id: StringName = &""
 var selected_character_card_id: StringName = &""
 var equipment_target_character_id: StringName = &""
@@ -378,6 +383,20 @@ func _build_ui() -> void:
 	inventory_card_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inventory_scroll.add_child(inventory_card_list)
 
+	dungeon_picker_footer = HBoxContainer.new()
+	dungeon_picker_footer.hide()
+	drawer_box.add_child(dungeon_picker_footer)
+	dungeon_picker_count = _make_ink_label("", 14, BOARD_TITLE_INK)
+	dungeon_picker_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dungeon_picker_count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dungeon_picker_footer.add_child(dungeon_picker_count)
+	dungeon_picker_done = Button.new()
+	dungeon_picker_done.text = "완료"
+	dungeon_picker_done.custom_minimum_size = Vector2(96, 40)
+	_style_notice_button(dungeon_picker_done, true)
+	dungeon_picker_done.pressed.connect(_finish_dungeon_picker)
+	dungeon_picker_footer.add_child(dungeon_picker_done)
+
 	_build_player_creation_overlay()
 
 
@@ -558,13 +577,24 @@ func _build_player_creation_overlay() -> void:
 	player_creation_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	skill_column.add_child(player_creation_status_label)
 
+	var creation_actions := HBoxContainer.new()
+	creation_actions.add_theme_constant_override("separation", 10)
+	outer.add_child(creation_actions)
+	var randomize_button := Button.new()
+	randomize_button.text = "랜덤 생성"
+	randomize_button.custom_minimum_size = Vector2(120, 42)
+	_style_notice_button(randomize_button, false)
+	randomize_button.pressed.connect(_on_random_player_pressed)
+	creation_actions.add_child(randomize_button)
+
 	player_create_button = Button.new()
 	player_create_button.text = "캐릭터 생성"
 	player_create_button.custom_minimum_size = Vector2(0, 42)
+	player_create_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	player_create_button.focus_mode = Control.FOCUS_NONE
 	_style_notice_button(player_create_button, true)
 	player_create_button.pressed.connect(_on_player_create_pressed)
-	outer.add_child(player_create_button)
+	creation_actions.add_child(player_create_button)
 	_refresh_player_creation_form()
 
 
@@ -642,6 +672,27 @@ func _reset_player_creation_form() -> void:
 
 
 func _on_player_creation_changed(_new_text: String) -> void:
+	_refresh_player_creation_form()
+
+
+func _on_random_player_pressed() -> void:
+	var draft := GameState.make_random_player_draft()
+	if draft.is_empty():
+		return
+	player_name_input.text = draft.name
+	for option in [player_species_option, player_job_option]:
+		var id: StringName = draft.species if option == player_species_option else draft.job
+		for index in option.item_count:
+			if option.get_item_metadata(index) == id:
+				option.select(index)
+				break
+	var growth: StatBlock = draft.growth
+	for stat_name in StatBlock.GROWTH_STAT_NAMES:
+		player_creation_growth[stat_name] = growth.get(stat_name)
+	player_creation_skills = draft.skills
+	for skill_id in player_skill_checkboxes:
+		var checkbox: CheckBox = player_skill_checkboxes[skill_id]
+		checkbox.set_pressed_no_signal(player_creation_skills.has(skill_id))
 	_refresh_player_creation_form()
 
 
@@ -877,26 +928,39 @@ func _make_money_stack_layer(offset: Vector2, background_color: Color, text: Str
 	return layer
 
 
-func _make_character_card_row(card: CardDefinition) -> PanelContainer:
+func _make_character_card_row(card: CardDefinition, as_picker: bool = false) -> PanelContainer:
 	var row := PanelContainer.new()
 	var is_selected := selected_character_card_id == card.id
 	var assigned_event := _character_event_assignment_label(card)
-	var is_event_selection := active_drawer_type == Drawer.CHARACTER_PICKER
-	var is_unavailable_for_event := is_event_selection and not assigned_event.is_empty()
+	var is_dungeon_pick := as_picker and is_selecting_dungeon_character
+	var is_in_party := is_dungeon_pick and dungeon_candidate_ids.has(card.id)
+	var picker_event := _character_picker_event_id() if as_picker else &""
+	var can_pick := is_in_party or (as_picker and _can_stage_event_character(picker_event, card))
 	var style := notice_board_art.note
 	if not assigned_event.is_empty():
 		style = notice_board_art.completed_note
-	if is_selected:
+	if is_selected or is_in_party:
 		style = notice_board_art.selected_note
 	row.add_theme_stylebox_override("panel", style)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	if not assigned_event.is_empty():
+	if is_in_party:
+		row.tooltip_text = "탐사 인원에서 제외"
+	elif not assigned_event.is_empty():
 		row.tooltip_text = "%s에 배치 중" % assigned_event
+	elif as_picker:
+		row.tooltip_text = "인물 선택" if can_pick else "현재 선택할 수 없습니다."
 	else:
-		row.tooltip_text = "Click to hide details." if is_selected else "Click to show details."
-	if not is_unavailable_for_event:
-		row.gui_input.connect(_on_character_card_gui_input.bind(card.id))
+		row.tooltip_text = "인물 상세 · 드래그하여 의뢰에 배치"
+	if as_picker:
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if can_pick else Control.CURSOR_FORBIDDEN
+		if can_pick:
+			row.gui_input.connect(_on_character_picker_input.bind(card.id))
+	else:
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.gui_input.connect(_on_roster_card_input.bind(row, card.id))
+		if assigned_event.is_empty():
+			row.set_drag_forwarding(_get_character_drag_data.bind(row, card.id), Callable(), Callable())
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -928,8 +992,8 @@ func _make_character_card_row(card: CardDefinition) -> PanelContainer:
 	job_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	summary.add_child(job_label)
 
-	if not assigned_event.is_empty():
-		var assignment_label := _make_ink_label("배치 중 · %s" % assigned_event, 12, NOTICE_ACTIVE_INK)
+	if is_in_party or not assigned_event.is_empty():
+		var assignment_label := _make_ink_label("선택됨" if is_in_party else "배치 중 · %s" % assigned_event, 12, NOTICE_ACTIVE_INK)
 		assignment_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		assignment_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		summary.add_child(assignment_label)
@@ -1414,6 +1478,7 @@ func _make_facility_event_detail(facility: int) -> VBoxContainer:
 	)
 	slot.disabled = slot.disabled or GameState.is_game_over or GameState.has_pending_job_change()
 	slot.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_enable_character_drop(slot, _facility_event_id(facility))
 	box.add_child(slot)
 
 	if character != null:
@@ -1468,30 +1533,12 @@ func _make_dungeon_event_detail() -> VBoxContainer:
 	elif status == GameState.DungeonStatus.EXPLORING:
 		box.add_child(_make_ink_label("탐사 중", 16, NOTICE_ACTIVE_INK))
 
-	for id in party:
-		var character := ContentCatalog.get_card(id)
-		if character == null:
-			continue
-		var member_row := HBoxContainer.new()
-		member_row.add_theme_constant_override("separation", 10)
-		box.add_child(member_row)
-		var name_label := _make_ink_label(character.label(), 16)
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		member_row.add_child(name_label)
-		if status == GameState.DungeonStatus.AVAILABLE:
-			var remove_button := _make_close_button()
-			remove_button.tooltip_text = "탐사대에서 제외"
-			_style_notice_button(remove_button, false)
-			remove_button.pressed.connect(_remove_dungeon_candidate.bind(id))
-			member_row.add_child(remove_button)
+	if status != GameState.DungeonStatus.CLEARED:
+		box.add_child(_make_dungeon_assignment_slots(party, status == GameState.DungeonStatus.AVAILABLE and not GameState.is_game_over))
 	if status == GameState.DungeonStatus.AVAILABLE:
-		var slot := _make_assignment_slot_button("탐사 인원", "%s/%s" % [party.size(), GameState.DUNGEON_PARTY_LIMIT], not party.is_empty(), false, _choose_dungeon_character)
-		slot.disabled = party.size() >= GameState.DUNGEON_PARTY_LIMIT or GameState.is_game_over
-		box.add_child(slot)
 		var confirm := Button.new()
 		confirm.text = "배치 확정"
-		confirm.disabled = not GameState.can_schedule_dungeon(dungeon_candidate_ids)
+		confirm.disabled = is_selecting_dungeon_character or not GameState.can_schedule_dungeon(dungeon_candidate_ids)
 		_style_notice_button(confirm, true)
 		confirm.pressed.connect(_confirm_dungeon_party)
 		box.add_child(confirm)
@@ -1504,17 +1551,71 @@ func _make_dungeon_event_detail() -> VBoxContainer:
 	return box
 
 
-func _choose_dungeon_character() -> void:
-	if GameState.dungeon_status != GameState.DungeonStatus.AVAILABLE or dungeon_candidate_ids.size() >= GameState.DUNGEON_PARTY_LIMIT:
+func _make_dungeon_assignment_slots(party: Array[StringName], editable: bool) -> VBoxContainer:
+	var group := VBoxContainer.new()
+	group.add_theme_constant_override("separation", 6)
+	group.add_child(_make_ink_label("탐사 인원 · %s/%s" % [_dungeon_member_count(party), GameState.DUNGEON_PARTY_LIMIT], 14, NOTICE_MUTED_INK))
+	var slots := HBoxContainer.new()
+	slots.add_theme_constant_override("separation", 10)
+	group.add_child(slots)
+	for index in GameState.DUNGEON_PARTY_LIMIT:
+		var id := _dungeon_slot_id(party, index)
+		var character := ContentCatalog.get_card(id)
+		var slot := _make_assignment_slot_button(
+			"인물 %s" % (index + 1), character.label() if character != null else "미배치",
+			character != null, not editable and character != null, _choose_dungeon_character.bind(index)
+		)
+		slot.disabled = not editable
+		slot.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		slot.tooltip_text = character.label() if character != null else ""
+		if editable:
+			_enable_character_drop(slot, DUNGEON_EVENT_ID, index)
+			if is_selecting_dungeon_character and _next_dungeon_slot(dungeon_picker_slot) == index:
+				_style_notice_slot(slot, Color("#CBD6CD"), NOTICE_ACTIVE_INK, NOTICE_ACTIVE_INK)
+		slots.add_child(slot)
+	return group
+
+
+func _dungeon_member_count(party: Array[StringName]) -> int:
+	return party.size() - party.count(&"")
+
+
+func _dungeon_slot_id(party: Array[StringName], index: int) -> StringName:
+	return party[index] if index >= 0 and index < party.size() else &""
+
+
+func _next_dungeon_slot(preferred: int = -1) -> int:
+	if preferred >= 0:
+		return preferred if preferred < GameState.DUNGEON_PARTY_LIMIT and _dungeon_slot_id(dungeon_candidate_ids, preferred).is_empty() else -1
+	for index in GameState.DUNGEON_PARTY_LIMIT:
+		if _dungeon_slot_id(dungeon_candidate_ids, index).is_empty():
+			return index
+	return -1
+
+
+func _choose_dungeon_character(slot_index: int) -> void:
+	if GameState.dungeon_status != GameState.DungeonStatus.AVAILABLE or GameState.is_game_over:
 		return
-	_close_inventory_drawer()
-	is_selecting_dungeon_character = true
-	_open_inventory_drawer(Drawer.CHARACTER_PICKER)
+	if not is_selecting_dungeon_character:
+		_close_inventory_drawer()
+		is_selecting_dungeon_character = true
+		inventory_scroll.scroll_vertical = 0
+		dungeon_picker_slot = _next_dungeon_slot(slot_index)
+		_open_inventory_drawer(Drawer.CHARACTER_PICKER)
+	else:
+		dungeon_picker_slot = _next_dungeon_slot(slot_index)
+	_refresh_event_list()
+
+
+func _finish_dungeon_picker() -> void:
+	_dismiss_inventory_drawer()
 
 
 func _remove_dungeon_candidate(id: StringName) -> void:
-	dungeon_candidate_ids.erase(id)
-	_refresh()
+	var index := dungeon_candidate_ids.find(id)
+	if index >= 0:
+		dungeon_candidate_ids[index] = &""
+		_refresh()
 
 
 func _confirm_dungeon_party() -> void:
@@ -1616,13 +1717,15 @@ func _make_job_training_event_detail() -> VBoxContainer:
 	var slot_row := HBoxContainer.new()
 	slot_row.add_theme_constant_override("separation", 10)
 	box.add_child(slot_row)
-	slot_row.add_child(_make_assignment_slot_button(
+	var character_slot := _make_assignment_slot_button(
 		"인물",
 		slot_text,
 		candidate_character != null,
 		is_assignment_complete,
 		Callable(self, "_on_job_training_character_slot_pressed")
-	))
+	)
+	_enable_character_drop(character_slot, JOB_TRAINING_EVENT_ID)
+	slot_row.add_child(character_slot)
 	slot_row.add_child(_make_event_slot_button("소비", "필요 없음", true, Callable()))
 
 	if candidate_character != null or assigned_character != null:
@@ -1687,13 +1790,15 @@ func _make_request_event_detail(request: RequestDefinition) -> VBoxContainer:
 	detail.add_child(slot_row)
 
 	var character_text := assigned_character.label() if assigned_character != null else "미배치"
-	slot_row.add_child(_make_assignment_slot_button(
+	var character_slot := _make_assignment_slot_button(
 		"인물",
 		character_text,
 		candidate_character != null,
 		is_queued,
 		Callable(self, "_on_daily_request_character_slot_pressed").bind(request.id)
-	))
+	)
+	_enable_character_drop(character_slot, _request_event_id(request))
+	slot_row.add_child(character_slot)
 	slot_row.add_child(_make_event_slot_button("소비", "필요 없음", true, Callable()))
 	if assigned_character != null:
 		var cancel_button := Button.new()
@@ -1729,6 +1834,7 @@ func _make_event_row(title: String, event_id: StringName, is_complete: bool) -> 
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.gui_input.connect(_on_event_row_gui_input.bind(event_id))
+	_enable_character_drop(panel, event_id)
 	panel.add_child(_make_event_title_button(title, event_id, is_complete))
 	return panel
 
@@ -1750,6 +1856,7 @@ func _make_event_title_button(title: String, event_id: StringName, is_complete: 
 	button.add_theme_color_override("font_hover_color", NOTICE_ACTIVE_INK)
 	button.add_theme_color_override("font_pressed_color", NOTICE_ACTIVE_INK)
 	button.pressed.connect(_on_event_title_pressed.bind(event_id))
+	_enable_character_drop(button, event_id)
 	return button
 
 
@@ -2262,6 +2369,9 @@ func _refresh_inventory_drawer() -> void:
 		active_drawer_type = Drawer.CLOSED
 
 	inventory_drawer.visible = active_drawer_type != Drawer.CLOSED
+	dungeon_picker_footer.visible = active_drawer_type == Drawer.CHARACTER_PICKER and is_selecting_dungeon_character
+	if dungeon_picker_footer.visible:
+		dungeon_picker_count.text = "선택 %s/%s" % [_dungeon_member_count(dungeon_candidate_ids), GameState.DUNGEON_PARTY_LIMIT]
 	shop_tabs.visible = active_drawer_type == Drawer.SHOP
 	facility_balance_label.visible = active_drawer_type in [Drawer.SHOP, Drawer.PERSONNEL]
 	if facility_balance_label.visible:
@@ -2347,7 +2457,7 @@ func _populate_assignment_candidate_list() -> void:
 		return
 
 	for card in characters:
-		inventory_card_list.add_child(_make_character_card_row(card))
+		inventory_card_list.add_child(_make_character_card_row(card, true))
 
 
 func _populate_equipment_card_list() -> void:
@@ -2986,27 +3096,35 @@ func _on_training_job_selected(job_id: StringName) -> void:
 
 
 func _open_inventory_drawer(drawer_type: int) -> void:
+	var was_dungeon_picker := is_selecting_dungeon_character
 	active_drawer_type = drawer_type
 	if drawer_type != Drawer.CHARACTER_PICKER:
 		facility_assignment_target = NO_FACILITY
 		request_assignment_target_id = &""
 		is_selecting_job_training_character = false
 		is_selecting_dungeon_character = false
+		dungeon_picker_slot = -1
 
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
+	if was_dungeon_picker and not is_selecting_dungeon_character:
+		_refresh_event_list()
 
 
 func _close_inventory_drawer() -> void:
+	var was_dungeon_picker := is_selecting_dungeon_character
 	active_drawer_type = Drawer.CLOSED
 	facility_assignment_target = NO_FACILITY
 	equipment_target_character_id = &""
 	is_selecting_tax_event_money = false
 	is_selecting_job_training_character = false
 	is_selecting_dungeon_character = false
+	dungeon_picker_slot = -1
 	request_assignment_target_id = &""
 	_refresh_inventory_drawer()
 	_refresh_inventory_buttons()
+	if was_dungeon_picker:
+		_refresh_event_list()
 
 
 func _dismiss_inventory_drawer() -> void:
@@ -3045,6 +3163,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _is_inventory_drawer_click(position: Vector2) -> bool:
 	return (
 		_is_point_in_control(inventory_drawer, position)
+		or (is_selecting_dungeon_character and _is_point_in_control(event_detail_popup, position))
 		or _is_point_in_control(character_detail_popup, position)
 		or _is_point_in_control(event_detail_close_button, position)
 		or _is_point_in_control(equipment_button, position)
@@ -3057,56 +3176,126 @@ func _is_point_in_control(control: Control, position: Vector2) -> bool:
 	return control != null and control.is_visible_in_tree() and control.get_global_rect().has_point(position)
 
 
-func _on_character_card_gui_input(event: InputEvent, card_id: StringName) -> void:
-	if event is InputEventMouseButton:
-		var mouse_event := event as InputEventMouseButton
-		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
-			if is_selecting_dungeon_character:
-				var character := ContentCatalog.get_card(card_id)
-				if dungeon_candidate_ids.size() < GameState.DUNGEON_PARTY_LIMIT and _character_event_assignment_label(character).is_empty() and GameState.can_add_dungeon_member(character):
-					dungeon_candidate_ids.append(card_id)
-					_close_inventory_drawer()
-					_refresh()
-				return
+func _character_picker_event_id() -> StringName:
+	if is_selecting_dungeon_character:
+		return DUNGEON_EVENT_ID
+	if facility_assignment_target != NO_FACILITY:
+		return _facility_event_id(facility_assignment_target)
+	if is_selecting_job_training_character:
+		return JOB_TRAINING_EVENT_ID
+	var request := ContentCatalog.get_request(request_assignment_target_id)
+	return _request_event_id(request) if request != null else &""
 
-			if facility_assignment_target != NO_FACILITY:
-				var facility := facility_assignment_target
-				var character := ContentCatalog.get_card(card_id)
-				if _character_event_assignment_label(character).is_empty() and GameState.can_assign_facility(facility, character):
-					facility_candidate_ids[facility] = card_id
-					_close_inventory_drawer()
-					_refresh()
-				return
 
-			if not String(request_assignment_target_id).is_empty():
-				var request_id := request_assignment_target_id
-				var request := ContentCatalog.get_request(request_id)
-				var request_character := ContentCatalog.get_card(card_id)
-				if _character_event_assignment_label(request_character).is_empty() and GameState.can_queue_daily_request(request, request_character):
-					daily_request_character_ids[request_id] = card_id
-					selected_event_id = _request_event_id(request)
-					_close_inventory_drawer()
-					_refresh()
-				return
+func _can_stage_event_character(event_id: StringName, character: CardDefinition, slot_index: int = -1) -> bool:
+	if character == null or GameState.has_pending_job_change() or not _character_event_assignment_label(character).is_empty():
+		return false
+	if event_id == DUNGEON_EVENT_ID:
+		return _next_dungeon_slot(slot_index) >= 0 and GameState.can_add_dungeon_member(character)
+	if event_id == JOB_TRAINING_EVENT_ID:
+		return GameState.get_job_training_character() == null and GameState.can_assign_job_training(character)
+	for facility in GameEnums.Facility.values():
+		if _facility_event_id(facility) == event_id:
+			return GameState.can_assign_facility(facility, character)
+	for request in GameState.office.available_requests:
+		if _request_event_id(request) == event_id:
+			return GameState.can_queue_daily_request(request, character)
+	return false
 
-			if is_selecting_job_training_character:
-				var training_character := ContentCatalog.get_card(card_id)
-				if _character_event_assignment_label(training_character).is_empty() and GameState.can_assign_job_training(training_character):
-					job_training_candidate_character_id = card_id
-					selected_event_id = JOB_TRAINING_EVENT_ID
-					_close_inventory_drawer()
-					_refresh()
-				return
 
-			if selected_character_card_id == card_id:
-				selected_character_card_id = &""
-			else:
-				selected_character_card_id = card_id
-				if not selected_event_id.is_empty():
-					_close_event_detail()
+func _stage_event_character(event_id: StringName, character: CardDefinition, slot_index: int = -1) -> void:
+	if not _can_stage_event_character(event_id, character, slot_index):
+		return
+	var switched_event := selected_event_id != event_id
+	selected_event_id = event_id
+	selected_character_card_id = &""
+	if event_id == DUNGEON_EVENT_ID:
+		var index := _next_dungeon_slot(slot_index)
+		if index >= dungeon_candidate_ids.size():
+			dungeon_candidate_ids.resize(index + 1)
+		dungeon_candidate_ids[index] = character.id
+		dungeon_picker_slot = -1
+	else:
+		if event_id == JOB_TRAINING_EVENT_ID:
+			job_training_candidate_character_id = character.id
+		for facility in GameEnums.Facility.values():
+			if _facility_event_id(facility) == event_id:
+				facility_candidate_ids[facility] = character.id
+				break
+		for request in GameState.office.available_requests:
+			if _request_event_id(request) == event_id:
+				daily_request_character_ids[request.id] = character.id
+				break
+		_close_inventory_drawer()
+	_refresh()
+	if switched_event:
+		event_detail_scroll.scroll_vertical = 0
 
-			_refresh_character_cards()
-			_refresh_character_detail_popup()
+
+func _on_character_picker_input(event: InputEvent, card_id: StringName) -> void:
+	if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
+		return
+	if is_selecting_dungeon_character and dungeon_candidate_ids.has(card_id):
+		_remove_dungeon_candidate(card_id)
+	else:
+		_stage_event_character(_character_picker_event_id(), ContentCatalog.get_card(card_id), dungeon_picker_slot)
+
+
+func _on_roster_card_input(event: InputEvent, row: Control, card_id: StringName) -> void:
+	if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if event.pressed:
+		# Opening details on release lets Godot initiate a character drag first.
+		row.set_meta(&"activate_on_release", true)
+		return
+	if not row.get_meta(&"activate_on_release", false):
+		return
+	row.set_meta(&"activate_on_release", false)
+	if not Rect2(Vector2.ZERO, row.size).has_point(event.position):
+		return
+	if selected_character_card_id == card_id:
+		selected_character_card_id = &""
+	else:
+		selected_character_card_id = card_id
+		if not selected_event_id.is_empty():
+			_close_event_detail()
+	_refresh_character_cards()
+	_refresh_character_detail_popup()
+
+
+func _get_character_drag_data(_position: Vector2, row: Control, card_id: StringName) -> Variant:
+	var character := ContentCatalog.get_card(card_id)
+	if character == null or not GameState.office.owned_cards.has(character) or not _character_event_assignment_label(character).is_empty():
+		return null
+	row.set_meta(&"activate_on_release", false)
+	var preview := _make_paper_panel(notice_board_art.selected_note)
+	preview.custom_minimum_size.x = 180
+	var label := _make_ink_label(character.label(), 16, NOTICE_ACTIVE_INK)
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	preview.add_child(label)
+	row.set_drag_preview(preview)
+	return {CHARACTER_DRAG_KEY: card_id}
+
+
+func _enable_character_drop(control: Control, event_id: StringName, slot_index: int = -1) -> void:
+	if event_id == TAX_PAYMENT_EVENT_ID:
+		return
+	control.set_drag_forwarding(Callable(), _can_drop_character.bind(event_id, slot_index), _drop_character.bind(event_id, slot_index))
+
+
+func _can_drop_character(_position: Vector2, data: Variant, event_id: StringName, slot_index: int) -> bool:
+	var character := _character_from_drag(data)
+	return _can_stage_event_character(event_id, character, slot_index)
+
+
+func _drop_character(_position: Vector2, data: Variant, event_id: StringName, slot_index: int) -> void:
+	_stage_event_character(event_id, _character_from_drag(data), slot_index)
+
+
+func _character_from_drag(data: Variant) -> CardDefinition:
+	if not data is Dictionary or not data.get(CHARACTER_DRAG_KEY) is StringName:
+		return null
+	return ContentCatalog.get_card(data[CHARACTER_DRAG_KEY])
 
 
 func _close_character_detail_popup() -> void:

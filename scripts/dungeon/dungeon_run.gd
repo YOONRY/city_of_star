@@ -2,15 +2,16 @@ extends RefCounted
 class_name DungeonRun
 
 enum Result { ACTIVE, CLEARED, RETREATED, DEFEATED }
-enum Action { STRIKE, BOLT, HEAL }
+enum Action { STRIKE = 0, CHARGE = 1, FIREBALL = 24, SWAP = 52 }
 
 const MAX_AP := 3
 const MAX_MP := 6
 const MOVE_RANGE := 2
 const ACTIONS := {
-	Action.STRIKE: {"title": "기본 공격", "ap": 1, "mp": 0, "range": 1},
-	Action.BOLT: {"title": "마력탄", "ap": 2, "mp": 2, "range": 4},
-	Action.HEAL: {"title": "응급치료", "ap": 2, "mp": 2, "range": 3},
+	Action.STRIKE: {"mp": 0, "range": 1, "hint": "인접한 적 1명"},
+	Action.CHARGE: {"mp": 0, "range": 3, "hint": "직선 2~3칸의 적에게 접근해 공격"},
+	Action.FIREBALL: {"mp": 3, "range": 4, "hint": "4칸 이내에서 선택한 칸부터 오른쪽 아래 2×2 마법 피해"},
+	Action.SWAP: {"mp": 1, "range": 4, "hint": "4칸 이내에서 시야에 들어오는 서로 다른 아군 두 명"},
 }
 
 var allies: Array[DungeonUnit] = []
@@ -38,11 +39,16 @@ func _init() -> void:
 	_log("폐수로 입구에 도착했다.")
 
 
-func add_ally(title: String, stats: StatBlock) -> void:
+func add_ally(title: String, stats: StatBlock, learned_skills: Array[SkillDefinition] = [], equipment: PackedStringArray = []) -> void:
 	if allies.size() >= DungeonLayout.PARTY_SPAWNS.size():
 		return
 	var spawn: Vector2i = DungeonLayout.PARTY_SPAWNS[allies.size()]
-	allies.append(DungeonUnit.new(title, spawn, stats.clone(), maxi(12, 14 + stats.health * 2), MAX_MP))
+	var ally := DungeonUnit.new(title, spawn, stats.clone(), maxi(12, 14 + stats.health * 2), MAX_MP)
+	for skill in learned_skills:
+		if skill != null and ACTIONS.has(skill.id) and skill.id != Action.STRIKE and skill.is_active() and skill.ap_cost >= 0:
+			ally.job_skills[skill.id] = skill
+	ally.equipment_categories = equipment.duplicate()
+	allies.append(ally)
 
 
 func _add_enemy(title: String, cell: Vector2i, hp: int, strength: int, agility: int, group: int) -> void:
@@ -180,44 +186,113 @@ func move_in_combat(to: Vector2i) -> bool:
 	return true
 
 
-func action_error(action: int, target: DungeonUnit) -> String:
+func action_ap(action: int) -> int:
+	return 1 if action == Action.STRIKE else actor().job_skills[action].ap_cost
+
+
+func action_title(action: int) -> String:
+	return "기본 공격" if action == Action.STRIKE else actor().job_skills[action].display_name
+
+
+func action_availability_error(action: int) -> String:
 	var unit := actor()
 	if result != Result.ACTIVE or unit == null or not unit.is_ally() or not ACTIONS.has(action):
 		return "아군의 행동 차례가 아닙니다."
-	var cost: Dictionary = ACTIONS[action]
-	if unit.ap < int(cost.ap):
+	if action != Action.STRIKE:
+		var skill: SkillDefinition = unit.job_skills.get(action)
+		if skill == null:
+			return "습득하지 않은 스킬입니다."
+		if not skill.matches_equipment(unit.equipment_categories):
+			return "필요 장비: %s" % skill.required_equipment
+	if unit.ap < action_ap(action):
 		return "AP가 부족합니다."
-	if unit.mp < int(cost.mp):
+	if unit.mp < int(ACTIONS[action].mp):
 		return "MP가 부족합니다."
-	if target == null or not target.is_alive():
-		return "대상이 없습니다."
-	if action == Action.HEAL:
-		if not allies.has(target) or target.hp == target.max_hp:
-			return "회복할 아군을 선택하세요."
-	elif not enemies.has(target) or target.encounter != encounters_cleared:
-		return "교전 중인 적을 선택하세요."
-	if distance(unit.cell, target.cell) > int(cost.range) or not _has_sight(unit.cell, target.cell):
-		return "사거리 밖이거나 시야가 막혔습니다."
 	return ""
 
 
-func use_action(action: int, target: DungeonUnit) -> bool:
-	if not action_error(action, target).is_empty():
+func action_error(action: int, cell: Vector2i, first_ally: DungeonUnit = null) -> String:
+	var error := action_availability_error(action)
+	if not error.is_empty():
+		return error
+	var unit := actor()
+	if not is_open(cell) or distance(unit.cell, cell) > int(ACTIONS[action].range) or not _has_sight(unit.cell, cell):
+		return "사거리 밖이거나 시야가 막혔습니다."
+	var target := unit_at(cell)
+	match action:
+		Action.STRIKE, Action.CHARGE:
+			if target == null or not enemies.has(target) or target.encounter != encounters_cleared:
+				return "교전 중인 적을 선택하세요."
+			if action == Action.CHARGE and not _can_charge(unit.cell, cell):
+				return "직선 2~3칸에 있고 길이 비어 있는 적에게 돌진할 수 있습니다."
+		Action.FIREBALL:
+			if _fireball_targets(cell).is_empty():
+				return "화염구 범위에 적이 없습니다."
+		Action.SWAP:
+			if target == null or not allies.has(target):
+				return "아군을 선택하세요."
+			if first_ally != null:
+				if not allies.has(first_ally) or not first_ally.is_alive() or distance(unit.cell, first_ally.cell) > int(ACTIONS[action].range) or not _has_sight(unit.cell, first_ally.cell):
+					return "첫 번째 아군이 사거리 또는 시야 밖입니다."
+				if first_ally == target:
+					return "서로 다른 아군 두 명을 선택하세요."
+	return ""
+
+
+func use_action(action: int, cell: Vector2i, first_ally: DungeonUnit = null) -> bool:
+	if (action == Action.SWAP and first_ally == null) or not action_error(action, cell, first_ally).is_empty():
 		return false
 	var unit := actor()
-	var cost: Dictionary = ACTIONS[action]
-	unit.ap -= int(cost.ap)
-	unit.mp -= int(cost.mp)
-	if action == Action.HEAL:
-		var amount := mini(target.max_hp - target.hp, 3 + maxi(0, unit.stats.intelligence) * 2)
-		target.hp += amount
-		_log("%s · %s 체력 +%s" % [cost.title, target.title, amount])
-	else:
-		var magical := action == Action.BOLT
-		var power := unit.stats.intelligence * 4 if magical else maxi(unit.stats.strength, unit.stats.agility) * 2
-		_deal_damage(target, power, magical, str(cost.title))
+	var title := action_title(action)
+	unit.ap -= action_ap(action)
+	unit.mp -= int(ACTIONS[action].mp)
+	var target := unit_at(cell)
+	match action:
+		Action.STRIKE:
+			_deal_damage(target, maxi(unit.stats.strength, unit.stats.agility) * 2, false, title)
+		Action.CHARGE:
+			unit.cell = cell - (cell - unit.cell).sign()
+			_deal_damage(target, roundi(unit.stats.strength * 0.9), false, title)
+		Action.FIREBALL:
+			for enemy in _fireball_targets(cell):
+				_deal_damage(enemy, roundi(unit.stats.intelligence * 1.3), true, title)
+		Action.SWAP:
+			target.cell = first_ally.cell
+			first_ally.cell = cell
+			_log("%s · %s ↔ %s" % [title, first_ally.title, target.title])
 	_check_battle_end()
 	return true
+
+
+func _can_charge(from: Vector2i, to: Vector2i) -> bool:
+	var delta := to - from
+	if (delta.x != 0 and delta.y != 0) or distance(from, to) < 2:
+		return false
+	var direction := delta.sign()
+	var cell := from + direction
+	while cell != to:
+		if not is_open(cell) or unit_at(cell) != null:
+			return false
+		cell += direction
+	return true
+
+
+func fireball_area(cell: Vector2i) -> Array[Vector2i]:
+	var area: Array[Vector2i] = []
+	for offset in [Vector2i.ZERO, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.ONE]:
+		var hit: Vector2i = cell + offset
+		if is_open(hit) and _has_sight(cell, hit):
+			area.append(hit)
+	return area
+
+
+func _fireball_targets(cell: Vector2i) -> Array[DungeonUnit]:
+	var targets: Array[DungeonUnit] = []
+	var area := fireball_area(cell)
+	for enemy in enemies:
+		if enemy.is_alive() and enemy.encounter == encounters_cleared and area.has(enemy.cell):
+			targets.append(enemy)
+	return targets
 
 
 func perform_enemy_turn() -> void:

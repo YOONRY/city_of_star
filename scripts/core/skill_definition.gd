@@ -58,12 +58,15 @@ func get_use_errors(column: int, available_ap: int, equipment_categories: Packed
 		errors.append("소모 AP가 정해지지 않았습니다.")
 	elif available_ap < ap_cost:
 		errors.append("AP가 부족합니다.")
-	if not required_equipment.is_empty():
-		var has_equipment := false
-		for category in equipment_categories:
-			if category.replace(" ", "") == required_equipment.replace(" ", ""):
-				has_equipment = true
-				break
-		if not has_equipment:
-			errors.append("필요 장비: %s" % required_equipment)
+	if not matches_equipment(equipment_categories):
+		errors.append("필요 장비: %s" % required_equipment)
 	return errors
+
+
+func matches_equipment(categories: PackedStringArray) -> bool:
+	if required_equipment.is_empty():
+		return true
+	for category in categories:
+		if category.replace(" ", "") == required_equipment.replace(" ", ""):
+			return true
+	return false

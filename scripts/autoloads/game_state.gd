@@ -414,10 +414,12 @@ func can_schedule_dungeon(party: Array[StringName]) -> bool:
 		return false
 	var unique := {}
 	for id in party:
+		if id.is_empty():
+			continue
 		if unique.has(id) or not can_add_dungeon_member(ContentCatalog.get_card(id)):
 			return false
 		unique[id] = true
-	return true
+	return not unique.is_empty()
 
 
 func schedule_dungeon(party: Array[StringName]) -> bool:
@@ -450,9 +452,19 @@ func begin_dungeon() -> DungeonRun:
 		return null
 	var run := DungeonRun.new()
 	for id in dungeon_party_ids:
+		if id.is_empty():
+			continue
 		var character := ContentCatalog.get_card(id)
 		if character != null and office.owned_cards.has(character):
-			run.add_ally(character.label(), get_effective_stats(character))
+			var learned_skills: Array[SkillDefinition] = []
+			var known_ids := get_character_job_skill_ids(character)
+			for skill_id in DungeonRun.ACTIONS:
+				if known_ids.has(str(skill_id)):
+					learned_skills.append(ContentCatalog.get_skill(skill_id))
+			var equipment := PackedStringArray()
+			for card in get_equipped_cards(character):
+				equipment.append(card.equipment_category)
+			run.add_ally(character.label(), get_effective_stats(character), learned_skills, equipment)
 	if run.allies.is_empty():
 		dungeon_party_ids.clear()
 		dungeon_due_day = 0
@@ -565,6 +577,28 @@ func has_player_character() -> bool:
 
 func get_player_initial_skill_options() -> PackedStringArray:
 	return PackedStringArray(RECRUIT_PERSONAL_SKILLS)
+
+
+func make_random_player_draft() -> Dictionary:
+	var basic_jobs := _get_basic_jobs()
+	if basic_jobs.is_empty() or ContentCatalog.species.is_empty():
+		return {}
+	var job := basic_jobs[recruit_rng.randi_range(0, basic_jobs.size() - 1)]
+	var species = ContentCatalog.species[recruit_rng.randi_range(0, ContentCatalog.species.size() - 1)]
+	var remaining_skills := get_player_initial_skill_options()
+	var skills := PackedStringArray()
+	for count in PLAYER_INITIAL_SKILL_COUNT:
+		var index := recruit_rng.randi_range(0, remaining_skills.size() - 1)
+		skills.append(remaining_skills[index])
+		remaining_skills.remove_at(index)
+
+	return {
+		"name": _generate_character_name(),
+		"species": species.id,
+		"job": job.id,
+		"growth": _generate_growth(PLAYER_GROWTH_BUDGET),
+		"skills": skills,
+	}
 
 
 func can_create_player_character(
@@ -1060,10 +1094,7 @@ func _refresh_hire_candidates() -> void:
 			generated_character_ids.erase(candidate.id)
 	hire_candidates.clear()
 
-	var basic_jobs: Array[JobDefinition] = []
-	for job in ContentCatalog.jobs:
-		if job != null and job.is_basic_job():
-			basic_jobs.append(job)
+	var basic_jobs := _get_basic_jobs()
 
 	if basic_jobs.is_empty() or ContentCatalog.species.is_empty():
 		return
@@ -1102,12 +1133,9 @@ func _generate_hire_candidate(basic_jobs: Array[JobDefinition], candidate_index:
 	var candidate := CardDefinition.new()
 	recruit_serial += 1
 	candidate.id = StringName("random_recruit_%s_%s_%s" % [current_day, recruit_serial, candidate_index])
-	candidate.display_name = "%s %s" % [
-		RECRUIT_LAST_NAMES[recruit_rng.randi_range(0, RECRUIT_LAST_NAMES.size() - 1)],
-		RECRUIT_FIRST_NAMES[recruit_rng.randi_range(0, RECRUIT_FIRST_NAMES.size() - 1)],
-	]
+	candidate.display_name = _generate_character_name()
 	candidate.card_type = GameEnums.CardType.CHARACTER
-	candidate.growth = _generate_recruit_growth()
+	candidate.growth = _generate_growth(recruit_rng.randi_range(10, 12) * 10)
 	candidate.skill_ids = _generate_recruit_personal_skills()
 	candidate.species = species_definition.id
 	candidate.job = job.id
@@ -1117,19 +1145,34 @@ func _generate_hire_candidate(basic_jobs: Array[JobDefinition], candidate_index:
 	return candidate
 
 
-func _generate_recruit_growth() -> StatBlock:
+func _get_basic_jobs() -> Array[JobDefinition]:
+	var jobs: Array[JobDefinition] = []
+	for job in ContentCatalog.jobs:
+		if job != null and job.is_basic_job():
+			jobs.append(job)
+	return jobs
+
+
+func _generate_character_name() -> String:
+	return "%s %s" % [
+		RECRUIT_LAST_NAMES[recruit_rng.randi_range(0, RECRUIT_LAST_NAMES.size() - 1)],
+		RECRUIT_FIRST_NAMES[recruit_rng.randi_range(0, RECRUIT_FIRST_NAMES.size() - 1)],
+	]
+
+
+func _generate_growth(target_total: int) -> StatBlock:
 	var growth := StatBlock.new()
-	growth.strength = 10
-	growth.agility = 10
-	growth.intelligence = 10
-	growth.charm = 10
-	growth.health = 10
-	var target_total := recruit_rng.randi_range(10, 12) * 10
+	var available_stats := StatBlock.GROWTH_STAT_NAMES.duplicate()
+	for stat_name in available_stats:
+		growth.set(stat_name, PLAYER_GROWTH_MIN_PER_STAT)
 	var points_to_distribute := target_total - growth.total()
-	var stat_names := StatBlock.GROWTH_STAT_NAMES
-	while points_to_distribute > 0:
-		var stat_name: String = stat_names[recruit_rng.randi_range(0, stat_names.size() - 1)]
-		growth.set(stat_name, int(growth.get(stat_name)) + 10)
+	while points_to_distribute >= 10 and not available_stats.is_empty():
+		var index := recruit_rng.randi_range(0, available_stats.size() - 1)
+		var stat_name: String = available_stats[index]
+		var value := int(growth.get(stat_name)) + 10
+		growth.set(stat_name, value)
+		if value >= PLAYER_GROWTH_MAX_PER_STAT:
+			available_stats.remove_at(index)
 		points_to_distribute -= 10
 	return growth
 

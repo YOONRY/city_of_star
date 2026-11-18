@@ -177,9 +177,59 @@ func _run_tests() -> void:
 	GameState.reset_game()
 	_check(GameState.get_character_event_assignment(runner).is_empty() and GameState.office.money == starting_money, "Game reset clears assignments and transactions")
 	screen.free()
+	await _test_character_drops()
 	if failures.is_empty():
 		print("Facility checks passed.")
 	get_tree().quit(0 if failures.is_empty() else 1)
+
+
+func _test_character_drops() -> void:
+	GameState.reset_game()
+	var runner := ContentCatalog.get_card(&"night_runner")
+	var mediator := ContentCatalog.get_card(&"street_mediator")
+	var fixer := ContentCatalog.get_card(&"clinic_fixer")
+	GameState.player_character_id = runner.id
+	GameState.office.add_card(fixer)
+	var screen := preload("res://scenes/main/main.tscn").instantiate() as Control
+	get_tree().root.add_child(screen)
+	var events: VBoxContainer = screen.get("event_list")
+	var roster: VBoxContainer = screen.get("character_card_list")
+	var detail: VBoxContainer = screen.get("event_detail_content")
+	var close: Button = screen.get("event_detail_close_button")
+	var character_popup: Control = screen.get("character_detail_popup")
+	var started := await _drag(_character_row(roster, runner), _find_button(events, "세금 납부"))
+	_check(started and not character_popup.visible and screen.get("selected_event_id") == &"", "An invalid drop does not open a card or assign to tax")
+	started = await _drag(_character_row(roster, runner), _find_button(events, "인력 사무소"))
+	_check(started and screen.get("facility_candidate_ids").get(PERSONNEL) == runner.id, "Dropping on an event notice stages its staff and opens the detail")
+	_check(GameState.get_facility_character(PERSONNEL) == null, "Drag and drop does not confirm facility staffing")
+	await _click(close)
+	await _click(_find_button(events, "직업 교육소"))
+	var training_slot := _find_button(detail, "인물\n미배치")
+	started = await _drag(_character_row(roster, runner), training_slot)
+	_check(not started and screen.get("job_training_candidate_character_id") == &"", "A staged facility member cannot be dragged to another event")
+	started = await _drag(_character_row(roster, mediator), training_slot)
+	_check(started and screen.get("job_training_candidate_character_id") == mediator.id, "Dropping on a training slot stages that character")
+	await _click(_find_button(detail, "배치 취소"))
+	await _click(close)
+	var request := GameState.office.available_requests[0]
+	var request_caption: String = screen.call("_request_display_title", request)
+	await _click(_find_button(events, request_caption))
+	started = await _drag(_character_row(roster, mediator), _find_button(detail, "인물\n미배치"))
+	_check(started and screen.get("daily_request_character_ids").get(request.id) == mediator.id, "Dropping on a daily request slot stages its character")
+	await _click(_find_button(detail, "실행"))
+	_check(GameState.get_daily_request_assigned_character(request) == mediator, "Dragged candidates use the usual confirmation flow")
+	await _click(_find_button(events, "인력 사무소"))
+	await _click(_find_button(detail, "배치 취소"))
+	await _click(close)
+	started = await _drag(_character_row(roster, runner), _find_button(events, request_caption))
+	_check(started and screen.get("selected_event_id") == &"" and GameState.get_daily_request_assigned_character(request) == mediator, "Confirmed requests reject another drop")
+	await _click(_find_button(events, GameState.DUNGEON_TITLE))
+	started = await _drag(_character_row(roster, runner), _find_button(detail, "인물 3\n미배치"))
+	_check(started and _find_button(detail, "인물 3\n%s" % runner.label()) != null and _find_button(detail, "인물 1\n미배치") != null, "Drag and drop fills the exact numbered expedition slot")
+	started = await _drag(_character_row(roster, fixer), _find_button(detail, "인물 3\n%s" % runner.label()))
+	_check(started and _find_button(detail, "인물 3\n%s" % runner.label()) != null, "A drop cannot overwrite a filled expedition slot")
+	screen.free()
+	GameState.reset_game()
 
 
 func _test_player_creation(screen: Control) -> void:
@@ -194,6 +244,16 @@ func _test_player_creation(screen: Control) -> void:
 	_check(create.disabled, "Two skills are still required after spending the growth budget")
 	await _click(checkboxes.values()[1] as CheckBox)
 	_check(not create.disabled, "The completed paper form enables creation")
+	var random_button := _find_button(form, "랜덤 생성")
+	await _click(random_button)
+	var rerolled: PackedStringArray = screen.get("player_creation_skills")
+	_check(form.visible and not GameState.has_player_character(), "Random filling does not start the game")
+	_check(not create.disabled and rerolled.size() == 2 and rerolled[0] != rerolled[1], "Random filling creates a valid draft with distinct personal skills")
+	for skill_id in checkboxes:
+		_check(checkboxes[skill_id].button_pressed == rerolled.has(skill_id), "Random skill selection is reflected on the form")
+	for iteration in 32:
+		var draft := GameState.make_random_player_draft()
+		_check(GameState.can_create_player_character(draft.name, draft.species, draft.job, draft.growth, draft.skills), "Every draft follows the character creation rules")
 	await _click(create)
 	_check(GameState.has_player_character() and not form.visible, "Creation opens the office with the new character")
 
@@ -220,6 +280,37 @@ func _click(control: Control) -> void:
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = pressed
 		get_tree().root.push_input(click, true)
+
+
+func _drag(source: Control, target: Control) -> bool:
+	_check(source != null and target != null, "Controls exist for a real viewport drag")
+	if source == null or target == null:
+		return false
+	for frame in 3:
+		await get_tree().process_frame
+	var viewport := get_tree().root
+	var start := source.get_global_rect().get_center()
+	var finish := target.get_global_rect().get_center()
+	var click := InputEventMouseButton.new()
+	click.position = start
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.button_mask = MOUSE_BUTTON_MASK_LEFT
+	click.pressed = true
+	viewport.push_input(click, true)
+	var previous := start
+	for position in [start + Vector2(-24, 0), finish]:
+		var motion := InputEventMouseMotion.new()
+		motion.position = position
+		motion.relative = position - previous
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		viewport.push_input(motion, true)
+		previous = position
+	var started := viewport.gui_is_dragging()
+	var release := InputEventMouseButton.new()
+	release.position = finish
+	release.button_index = MOUSE_BUTTON_LEFT
+	viewport.push_input(release, true)
+	return started
 
 
 func _pick_character(container: Node, character: CardDefinition) -> void:

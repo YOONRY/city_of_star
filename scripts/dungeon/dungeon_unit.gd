@@ -10,6 +10,8 @@ var max_mp: int
 var mp: int
 var ap: int
 var encounter: int
+var job_skills: Dictionary[int, SkillDefinition] = {}
+var equipment_categories := PackedStringArray()
 
 
 func _init(unit_name: String, spawn: Vector2i, attributes: StatBlock, health: int, mana: int, group: int = -1) -> void:

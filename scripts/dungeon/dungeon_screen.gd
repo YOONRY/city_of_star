@@ -21,6 +21,7 @@ var action_buttons: Dictionary = {}
 var end_turn_button: Button
 var retreat_dialog: ConfirmationDialog
 var selected_action: int = DungeonRun.Action.STRIKE
+var swap_first: DungeonUnit
 var explore_route: Array[Vector2i] = []
 var clock := 0.0
 var observed_turn := -1
@@ -103,19 +104,17 @@ func _build() -> void:
 	actions.add_theme_constant_override("v_separation", 8)
 	panel.add_child(actions)
 	for action in DungeonRun.ACTIONS:
-		var cost: Dictionary = DungeonRun.ACTIONS[action]
-		var caption := "%s\n%s AP · %s MP" % [cost.title, cost.ap, cost.mp]
-		var button := _button(caption, false)
+		var button := _button("", false)
 		button.toggle_mode = true
 		button.custom_minimum_size.y = 56
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.tooltip_text = "사거리 %s칸" % cost.range
 		button.pressed.connect(_select_action.bind(action))
 		actions.add_child(button)
 		action_buttons[action] = button
 	end_turn_button = _button("턴 종료", true)
+	end_turn_button.custom_minimum_size.y = 36
 	end_turn_button.pressed.connect(_end_turn)
-	actions.add_child(end_turn_button)
+	panel.add_child(end_turn_button)
 
 	var journal := _panel(_flat(Color("#202D32"), Color("#425655"), 10))
 	layout.add_child(journal)
@@ -175,13 +174,21 @@ func _on_cell_pressed(cell: Vector2i) -> void:
 	if not run.actor().is_ally():
 		return
 	var unit := run.unit_at(cell)
-	if unit == null:
+	if selected_action == DungeonRun.Action.STRIKE and unit == null:
 		if not run.move_in_combat(cell):
 			message = "이동할 수 없는 칸입니다."
+	elif selected_action == DungeonRun.Action.SWAP and swap_first != null and unit == swap_first:
+		swap_first = null
+		message = "첫 번째 아군을 선택하세요."
 	else:
-		message = run.action_error(selected_action, unit)
+		message = run.action_error(selected_action, cell, swap_first)
 		if message.is_empty():
-			run.use_action(selected_action, unit)
+			if selected_action == DungeonRun.Action.SWAP and swap_first == null:
+				swap_first = unit
+				message = "%s와 위치를 바꿀 아군을 선택하세요." % unit.title
+			elif run.use_action(selected_action, cell, swap_first):
+				selected_action = DungeonRun.Action.STRIKE
+				swap_first = null
 	_after_action()
 
 
@@ -202,13 +209,22 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	explore_route.clear()
 	var unit := run.actor() if run.in_combat() else run.leader()
 	if unit != null and unit.is_ally():
-		_on_cell_pressed(unit.cell + direction)
+		if run.in_combat():
+			if run.move_in_combat(unit.cell + direction):
+				swap_first = null
+				message = ""
+				_after_action()
+		else:
+			_on_cell_pressed(unit.cell + direction)
 	get_viewport().set_input_as_handled()
 
 
 func _select_action(action: int) -> void:
+	if not run.action_availability_error(action).is_empty():
+		return
 	selected_action = action
-	message = ""
+	swap_first = null
+	message = "첫 번째 아군을 선택하세요." if action == DungeonRun.Action.SWAP else ""
 	_refresh_view()
 
 
@@ -238,6 +254,7 @@ func _refresh_view() -> void:
 	if run.turn_serial != observed_turn:
 		observed_turn = run.turn_serial
 		selected_action = DungeonRun.Action.STRIKE
+		swap_first = null
 		if unit != null and not unit.is_ally():
 			clock = 0.32
 		message = ""
@@ -257,7 +274,13 @@ func _refresh_view() -> void:
 	for action in action_buttons:
 		var button: Button = action_buttons[action]
 		var cost: Dictionary = DungeonRun.ACTIONS[action]
-		button.disabled = not ally_turn or unit.ap < int(cost.ap) or unit.mp < int(cost.mp)
+		button.visible = action == DungeonRun.Action.STRIKE or (ally_turn and unit.job_skills.has(action))
+		if not button.visible:
+			continue
+		var error := run.action_availability_error(action)
+		button.disabled = not error.is_empty()
+		button.text = "%s\n%s AP · %s MP" % [run.action_title(action), run.action_ap(action), cost.mp]
+		button.tooltip_text = cost.hint if error.is_empty() or not ally_turn else "%s\n%s" % [cost.hint, error]
 		button.set_pressed_no_signal(action == selected_action and ally_turn and not button.disabled)
 	end_turn_button.disabled = not ally_turn
 	var lines := run.log_lines.slice(maxi(0, run.log_lines.size() - 2))
@@ -265,6 +288,7 @@ func _refresh_view() -> void:
 		lines = PackedStringArray([run.log_lines[-1], message])
 	journal_label.text = "\n".join(lines)
 	map.selected_action = selected_action
+	map.swap_first = swap_first
 	map.queue_redraw()
 
 

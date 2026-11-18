@@ -9,6 +9,8 @@ const PARTY_TINTS := [Color.WHITE, Color("#E4D0A4"), Color("#BEDBEF")]
 
 var run: DungeonRun
 var selected_action: int = DungeonRun.Action.STRIKE
+var swap_first: DungeonUnit
+var hovered_cell := Vector2i(-1, -1)
 var visible_cells: Dictionary[Vector2i, bool] = {}
 var discovered_cells: Dictionary[Vector2i, bool] = {}
 
@@ -16,6 +18,10 @@ var discovered_cells: Dictionary[Vector2i, bool] = {}
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	resized.connect(queue_redraw)
+	mouse_exited.connect(func() -> void:
+		hovered_cell = Vector2i(-1, -1)
+		queue_redraw()
+	)
 
 
 func _cell_size() -> int:
@@ -32,6 +38,11 @@ func _cell_at(position: Vector2) -> Vector2i:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and selected_action == DungeonRun.Action.FIREBALL:
+		var cell := _cell_at(event.position)
+		if cell != hovered_cell:
+			hovered_cell = cell
+			queue_redraw()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		var cell := _cell_at(event.position)
 		if Rect2i(Vector2i.ZERO, DungeonLayout.SIZE).has_point(cell):
@@ -71,8 +82,13 @@ func _draw() -> void:
 				_draw_wall(rect, cell)
 	_draw_exit(Rect2(origin + Vector2(DungeonLayout.EXIT * side), Vector2(side, side)))
 	var active := run.actor()
-	if active != null and active.is_ally() and active.ap > 0:
+	if active != null and active.is_ally() and active.ap > 0 and selected_action == DungeonRun.Action.STRIKE:
 		_draw_move_range(origin, side, active)
+	if selected_action == DungeonRun.Action.FIREBALL and run.action_error(selected_action, hovered_cell).is_empty():
+		for cell in run.fireball_area(hovered_cell):
+			var marked := Rect2(origin + Vector2(cell * side), Vector2(side, side)).grow(-2)
+			draw_rect(marked, Color("#CE835350"))
+			draw_rect(marked, Color("#EEB279"), false, 2)
 	for unit in run.allies + run.enemies:
 		if unit.is_alive() and (unit.is_ally() or visible_cells.has(unit.cell)):
 			var rect := Rect2(origin + Vector2(unit.cell * side), Vector2(side, side))
@@ -138,7 +154,9 @@ func _draw_unit(rect: Rect2, unit: DungeonUnit, active: DungeonUnit) -> void:
 	var ally := unit.is_ally()
 	if unit == active:
 		draw_rect(rect.grow(-1), Color("#EAC583"), false, 2)
-	if active != null and active.is_ally() and run.action_error(selected_action, unit).is_empty():
+	if unit == swap_first:
+		draw_rect(rect.grow(-4), Color("#8DD4CA"), false, 3)
+	elif active != null and active.is_ally() and selected_action != DungeonRun.Action.FIREBALL and run.action_error(selected_action, unit.cell, swap_first).is_empty():
 		draw_rect(rect.grow(-4), Color("#B8D8A5") if ally else Color("#E7A181"), false, 2)
 	var tint: Color = PARTY_TINTS[run.allies.find(unit)] if ally else (Color("#FFD5A5") if unit.encounter == 1 else Color.WHITE)
 	var sprite_rect := rect.grow(-4)
